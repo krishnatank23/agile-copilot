@@ -1,40 +1,58 @@
 """
 Agile Copilot — FastAPI application.
 
+Storage: SQLite (via SQLAlchemy async) — replaces SharePoint Excel.
+Platforms: MS Teams (Graph API) + Slack (Events API).
+
 Endpoints:
-  POST /api/eod-webhook        — receive EOD payload (manual or from Power Automate)
-  POST /api/graph-webhook       — receive Graph API subscription notifications
-  GET  /api/graph-webhook       — handle Graph API validation handshake
-  POST /api/subscribe           — create/renew Graph API subscription
-  POST /api/notify-wip          — send WIP task summary to Teams group chat
-  POST /api/eod-reminder        — send EOD reminder to Teams group chat
-  POST /api/morning-summary     — send AI-prioritized morning summary to Teams
-  GET  /api/login               — start delegated auth (sign in to send Teams messages)
-  GET  /api/auth-callback       — OAuth callback to capture auth code
-  GET  /health                  — health check
+  POST /api/eod-webhook        — receive EOD payload (manual / Power Automate)
+  POST /api/graph-webhook      — receive Graph API subscription notifications (Teams)
+  GET  /api/graph-webhook      — Graph API subscription validation handshake
+  POST /api/slack-webhook      — receive Slack Events API notifications
+  POST /api/subscribe          — create/renew Graph API subscription
+  POST /api/notify-wip         — send WIP task summary to Teams/Slack
+  POST /api/eod-reminder       — send EOD reminder
+  POST /api/morning-summary    — send AI-prioritized morning summary
+  GET  /api/login              — start delegated Teams auth
+  GET  /api/auth-callback      — OAuth callback
+  GET  /api/tasks              — list tasks (web UI)
+  PATCH /api/tasks/{id}        — update task (web UI)
+  GET  /api/members            — list members (web UI)
+  GET  /api/dashboard/*        — dashboard aggregates (web UI)
+  GET  /health                 — health check
 """
 
 import asyncio
+import hashlib
+import hmac as _hmac
 import logging
 from contextlib import asynccontextmanager
 from datetime import date
 
+import httpx
 from fastapi import FastAPI, Request, Response, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, HTMLResponse
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings, get_sprint_end_date
 from app.teams_capture import extract_metadata, is_eod_message, validate_eod
 from app.ai_parser import parse_eod
 from app.validator import validate_all
-from app.excel_writer import (
-    write_tasks, resolve_sheet_name,
-    read_sheet_context, update_backlog_row,
-    list_all_sheets, get_existing_rows, write_backlog_items,
-)
 from app.task_router import route_tasks
 from app.subscription_manager import subscription_manager
 from app.scheduler import scheduler
+
+from app.db.database import init_db, get_db, AsyncSessionLocal
+from app.db import crud
+from app.adapters.teams import TeamsAdapter, get_default_adapter
+from app.adapters.slack import SlackAdapter
+
+from app.api.tasks import router as tasks_router
+from app.api.members import router as members_router
+from app.api.dashboard import router as dashboard_router
+from app.api.workspaces import router as workspaces_router
 
 # ──────────────────────────────────────────────
 # Logging
@@ -54,22 +72,27 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup / shutdown logic."""
     logger.info("Agile Copilot starting up")
 
-    # Schedule subscription creation after server is fully ready
-    async def _delayed_subscribe():
-        await asyncio.sleep(5)  # wait for uvicorn to finish booting
-        try:
-            await subscription_manager.ensure_active()
-            logger.info("Subscription active on startup")
-        except Exception as e:
-            logger.warning("Could not create subscription on startup: %s", e)
+    # Initialise database (create tables if they don't exist)
+    await init_db()
 
-    asyncio.create_task(_delayed_subscribe())
-    subscription_manager.start_auto_renewal()
+    async with AsyncSessionLocal() as db:
+        await crud.ensure_default_workspace(db)
 
-    # Start daily scheduler (9:30 todo, 10:15 agile reminder, 11:30 progress, 6PM EOD)
+    # Delayed Teams subscription (Teams only — skip if not configured)
+    if settings.AZURE_CLIENT_ID and settings.CHAT_ID:
+        async def _delayed_subscribe():
+            await asyncio.sleep(5)
+            try:
+                await subscription_manager.ensure_active()
+                logger.info("Teams subscription active on startup")
+            except Exception as e:
+                logger.warning("Could not create Teams subscription: %s", e)
+
+        asyncio.create_task(_delayed_subscribe())
+        subscription_manager.start_auto_renewal()
+
     scheduler.start(
         eod_callback=_send_eod_reminder,
         morning_callback=_send_agile_reminder,
@@ -79,68 +102,43 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Cleanup
     scheduler.stop()
-    subscription_manager.stop_auto_renewal()
-    if subscription_manager.is_active:
-        try:
-            await subscription_manager.delete_subscription()
-        except Exception as e:
-            logger.warning("Failed to delete subscription on shutdown: %s", e)
+    if settings.AZURE_CLIENT_ID and settings.CHAT_ID:
+        subscription_manager.stop_auto_renewal()
+        if subscription_manager.is_active:
+            try:
+                await subscription_manager.delete_subscription()
+            except Exception as e:
+                logger.warning("Failed to delete Teams subscription: %s", e)
 
     logger.info("Agile Copilot shutting down")
 
 
-# Simple dedup cache to prevent processing the same Graph notification twice
+# Dedup cache — prevents processing the same Graph/Slack notification twice
 _processed_messages: set[str] = set()
 _MAX_CACHE_SIZE = 200
 
 app = FastAPI(
     title="Agile Copilot",
-    description="Automated AI agent that parses MS Teams EOD updates and fills the agile Excel sheet.",
-    version="1.0.0",
+    description="AI-powered agile tracking bot with Teams + Slack support.",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
+# Allow the Next.js dev server (port 3000) and any production domain
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# ──────────────────────────────────────────────
-# Delegated auth — one-time user login for Teams messaging
-# ──────────────────────────────────────────────
-
-
-@app.get("/api/login")
-async def login(request: Request):
-    """Redirect user to Microsoft login to grant Teams messaging permission."""
-    from app.graph_auth import graph_auth
-
-    redirect_uri = settings.REDIRECT_URI or f"{str(request.base_url).rstrip('/')}/api/auth-callback"
-    login_url = graph_auth.get_login_url(redirect_uri)
-    return RedirectResponse(login_url)
-
-
-@app.get("/api/auth-callback")
-async def auth_callback(request: Request, code: str = "", error: str = ""):
-    """OAuth callback — exchange code for delegated token."""
-    from app.graph_auth import graph_auth
-
-    if error:
-        return HTMLResponse(f"<h2>Login failed</h2><p>{error}</p>", status_code=400)
-
-    if not code:
-        return HTMLResponse("<h2>No authorization code received</h2>", status_code=400)
-
-    redirect_uri = settings.REDIRECT_URI or f"{str(request.base_url).rstrip('/')}/api/auth-callback"
-
-    try:
-        await graph_auth.exchange_code(code, redirect_uri)
-        return HTMLResponse(
-            "<h2>Login successful!</h2>"
-            "<p>Agile Copilot can now send messages to your Teams chats.</p>"
-            "<p>You can close this tab.</p>"
-        )
-    except Exception as e:
-        logger.error("Auth callback failed: %s", e)
-        return HTMLResponse(f"<h2>Login failed</h2><p>{e}</p>", status_code=500)
+# Mount API routers
+app.include_router(tasks_router)
+app.include_router(members_router)
+app.include_router(dashboard_router)
+app.include_router(workspaces_router)
 
 
 # ──────────────────────────────────────────────
@@ -149,14 +147,12 @@ async def auth_callback(request: Request, code: str = "", error: str = ""):
 
 
 class EODPayload(BaseModel):
-    """Direct EOD webhook payload (e.g. from Power Automate or manual POST)."""
     sender: str = ""
     message: str = ""
     timestamp: str = ""
 
 
 class PipelineResult(BaseModel):
-    """Result of the EOD processing pipeline."""
     status: str
     member: str
     tasks_parsed: int
@@ -166,185 +162,166 @@ class PipelineResult(BaseModel):
 
 
 # ──────────────────────────────────────────────
-# EOD processing pipeline
+# Adapter resolution — load per-workspace adapter from DB
 # ──────────────────────────────────────────────
 
 
-async def _process_backlog_command(sender: str, message: str) -> None:
-    """
-    Handle /backlog command from Teams.
-    Parses items from the message and appends them to the sender's Backlog column.
+async def _get_teams_adapter(workspace_id: int) -> TeamsAdapter:
+    """Load the TeamsAdapter for a specific workspace (cached per request)."""
+    async with AsyncSessionLocal() as db:
+        ws = await crud.get_workspace(db, workspace_id)
+    if ws:
+        return TeamsAdapter.from_workspace(ws)
+    return get_default_adapter()
 
-    Supported formats:
-        /backlog Brand Film
-        /backlog
-        - Item 1
-        - Item 2
-    """
-    # Strip the /backlog prefix and split into lines
+
+async def _get_slack_adapter(workspace_id: int) -> SlackAdapter:
+    async with AsyncSessionLocal() as db:
+        ws = await crud.get_workspace(db, workspace_id)
+    if ws:
+        return SlackAdapter.from_workspace(ws)
+    return SlackAdapter.from_settings()
+
+
+# ──────────────────────────────────────────────
+# Message sending (delegates to platform adapters)
+# ──────────────────────────────────────────────
+
+
+async def _send_teams_message(
+    content: str,
+    chat_id: str | None = None,
+    workspace_id: int = 1,
+) -> None:
+    adapter = await _get_teams_adapter(workspace_id)
+    await adapter.send_message(content, channel_id=chat_id)
+
+
+async def _send_agile_message(content: str, workspace_id: int = 1) -> None:
+    await _send_teams_message(content, workspace_id=workspace_id)
+
+
+# ──────────────────────────────────────────────
+# EOD processing pipeline (DB-backed)
+# ──────────────────────────────────────────────
+
+
+async def _process_backlog_command(sender: str, message: str, db: AsyncSession) -> None:
+    """Handle /backlog command — append items to the member's backlog in the DB."""
     body = message[len("/backlog"):].strip()
     lines = [l.strip().lstrip("-•*1234567890.)").strip() for l in body.splitlines()]
     items = [l for l in lines if l]
-
-    # If no items on separate lines, treat the rest of the first line as one item
     if not items and body:
         items = [body]
-
     if not items:
-        logger.info("/backlog from '%s' had no items", sender)
         return
 
-    sheet_name = await resolve_sheet_name(sender)
-    if not sheet_name:
-        logger.warning("/backlog: no sheet found for '%s'", sender)
+    member = await crud.get_or_create_member(db, sender)
+    if not member:
+        logger.warning("/backlog: no member found for '%s'", sender)
         return
 
-    try:
-        written = await write_backlog_items(sheet_name, items)
-        logger.info("/backlog: wrote %d items to '%s' sheet for '%s'", written, sheet_name, sender)
-        reply = f"<b>Backlog updated</b> — added {written} item(s) to {sheet_name}'s backlog:<br>" + \
-                "<br>".join(f"&bull; {i}" for i in items if i.strip())
-        await _send_teams_message(reply)
-    except Exception as e:
-        logger.error("/backlog write failed for '%s': %s", sender, e)
+    written = await crud.add_backlog_items(db, member.id, items)
+    reply = (
+        f"<b>Backlog updated</b> — added {written} item(s) for {sender}:<br>"
+        + "<br>".join(f"&bull; {i}" for i in items if i.strip())
+    )
+    await _send_teams_message(reply)
 
 
-async def _process_eod(sender: str, clean_message: str, timestamp: str) -> PipelineResult:
+async def _process_eod(
+    sender: str, clean_message: str, timestamp: str, db: AsyncSession
+) -> PipelineResult:
     """
-    Full pipeline:
-      1. Fetch backlog context from sheet
-      2. Parse EOD with AI (Gemini → Groq → local)
-      3. Validate parsed tasks (dedup, defaults, schema)
-      4. Write to Excel sheet
+    Full EOD pipeline (DB-backed):
+      1. Resolve member in DB (create if new)
+      2. Load context (existing tasks + backlog) from DB
+      3. Parse EOD with AI (Gemini → Groq → local)
+      4. Validate (dedup, defaults, schema)
+      5. Route (backlog promotion check)
+      6. Write results to DB
     """
     logger.info("Processing EOD from '%s'", sender)
 
-    # Resolve which worksheet belongs to this member
-    try:
-        sheet_name = await resolve_sheet_name(sender)
-    except Exception as e:
-        logger.error("Failed to resolve sheet for '%s': %s", sender, e)
+    member = await crud.get_or_create_member(db, sender)
+    if not member:
         return PipelineResult(
-            status="skipped",
-            member=sender,
-            tasks_parsed=0,
-            tasks_appended=0,
-            tasks_updated=0,
-            errors=[f"No sheet found for '{sender}'"],
+            status="skipped", member=sender,
+            tasks_parsed=0, tasks_appended=0, tasks_updated=0,
+            errors=[f"Could not resolve member for '{sender}'"],
         )
 
-    # Skip if no matching sheet was found
-    if not sheet_name:
-        logger.info("No sheet available for '%s' — skipping", sender)
-        return PipelineResult(
-            status="skipped",
-            member=sender,
-            tasks_parsed=0,
-            tasks_appended=0,
-            tasks_updated=0,
-            errors=[f"No sheet found for '{sender}'"],
-        )
-
-    logger.info("Using worksheet '%s' for member '%s'", sheet_name, sender)
-
-    # Build context for the parser — single sheet read
     sprint_end = get_sprint_end_date()
     today = date.today().isoformat()
 
     try:
-        sheet_ctx = await read_sheet_context(sheet_name=sheet_name)
+        sheet_ctx = await crud.get_member_context(db, member.id)
     except Exception as e:
-        logger.warning("Failed to read sheet context: %s — continuing with empty context", e)
-        sheet_ctx = {
-            "backlog_items": [], "existing_rows": [],
-            "backlog_list": [], "header_idx": 0,
-        }
-
-    backlog = sheet_ctx["backlog_list"]
-    existing_rows = sheet_ctx["existing_rows"]
+        logger.warning("Failed to read member context: %s — continuing empty", e)
+        sheet_ctx = {"backlog_items": [], "existing_rows": [], "backlog_list": []}
 
     context = {
         "member_name": sender,
         "today_date": today,
         "sprint_end_date": sprint_end,
-        "backlog_list": backlog,
-        "existing_rows": existing_rows,
+        "backlog_list": sheet_ctx["backlog_list"],
+        "existing_rows": sheet_ctx["existing_rows"],
     }
 
     logger.info(
-        "Sheet context: %d existing rows, %d backlog items",
-        len(existing_rows),
-        len(backlog),
+        "Context: %d existing rows, %d backlog items",
+        len(sheet_ctx["existing_rows"]), len(sheet_ctx["backlog_list"]),
     )
 
-    # Step 2: Parse EOD
-    logger.info("Clean message for parsing:\n%s", clean_message)
+    # Parse
+    logger.info("Clean message:\n%s", clean_message)
     try:
         tasks = await parse_eod(clean_message, context)
     except Exception as e:
         logger.error("All parsers failed: %s", e)
         return PipelineResult(
-            status="error",
-            member=sender,
-            tasks_parsed=0,
-            tasks_appended=0,
-            tasks_updated=0,
+            status="error", member=sender,
+            tasks_parsed=0, tasks_appended=0, tasks_updated=0,
             errors=[f"Parsing failed: {e}"],
         )
 
     if not tasks:
         return PipelineResult(
-            status="empty",
-            member=sender,
-            tasks_parsed=0,
-            tasks_appended=0,
-            tasks_updated=0,
+            status="empty", member=sender,
+            tasks_parsed=0, tasks_appended=0, tasks_updated=0,
         )
 
-    # Log parsed tasks for debugging
-    for i, t in enumerate(tasks):
-        logger.info(
-            "Parsed task %d: sprint_backlog='%s', brand='%s', activity='%s'",
-            i, t.get("sprint_backlog", ""), t.get("brand", ""), t.get("activity_type", ""),
-        )
-
-    # Step 3: Validate
-    new_tasks, update_tasks = await validate_all(tasks, existing_rows, backlog, sprint_end)
-
-    logger.info("After validation: %d new tasks, %d updates", len(new_tasks), len(update_tasks))
-
-    # Step 3.5: Route tasks — backlog promotion (in-place updates)
-    routed_tasks, inplace_updates = route_tasks(
-        new_tasks, sheet_ctx["backlog_items"],
+    # Validate
+    new_tasks, update_tasks = await validate_all(
+        tasks, sheet_ctx["existing_rows"], sheet_ctx["backlog_list"], sprint_end
     )
 
-    # Step 3.6: Write backlog in-place updates (task written on same row as backlog item)
-    for task in inplace_updates:
-        try:
-            await update_backlog_row(
-                sheet_name, task, task["_backlog_row_idx"], task["_backlog_col_idx"]
-            )
-            logger.info(
-                "Backlog in-place: wrote '%s' on row %d",
-                task.get("sprint_backlog", ""), task["_backlog_row_idx"] + 1,
-            )
-        except Exception as e:
-            logger.warning(
-                "Failed to update backlog row %d: %s", task["_backlog_row_idx"], e
-            )
+    # Route — backlog promotion check
+    routed_tasks, inplace_updates = route_tasks(new_tasks, sheet_ctx["backlog_items"])
 
-    # Step 4: Write to member's Excel sheet
+    # Write backlog-promoted tasks
+    promoted_count = 0
+    for task in inplace_updates:
+        backlog_item_id = task.get("_backlog_row_idx")
+        if backlog_item_id:
+            try:
+                await crud.promote_backlog_item(db, backlog_item_id, task, member.id, sprint_end)
+                promoted_count += 1
+            except Exception as e:
+                logger.warning("Failed to promote backlog item %d: %s", backlog_item_id, e)
+
+    # Write new + updated tasks
     try:
-        write_result = await write_tasks(routed_tasks, update_tasks, sheet_name=sheet_name)
+        write_result = await crud.upsert_tasks(
+            db, routed_tasks, update_tasks, member.id, sprint_end
+        )
     except Exception as e:
-        logger.error("Failed to write to Excel: %s", e)
+        logger.error("DB write failed: %s", e)
         return PipelineResult(
-            status="error",
-            member=sender,
+            status="error", member=sender,
             tasks_parsed=len(tasks),
-            tasks_appended=0,
-            tasks_updated=0,
-            errors=[f"Excel write failed: {e}"],
+            tasks_appended=0, tasks_updated=0,
+            errors=[f"DB write failed: {e}"],
         )
 
     return PipelineResult(
@@ -352,523 +329,343 @@ async def _process_eod(sender: str, clean_message: str, timestamp: str) -> Pipel
         member=sender,
         tasks_parsed=len(tasks),
         tasks_appended=write_result.get("appended", 0),
-        tasks_updated=write_result.get("updated", 0) + len(inplace_updates),
+        tasks_updated=write_result.get("updated", 0) + promoted_count,
         errors=write_result.get("errors", []),
     )
 
 
 # ──────────────────────────────────────────────
-# Endpoints
+# Delegated Teams auth
+# ──────────────────────────────────────────────
+
+
+@app.get("/api/login")
+async def login(request: Request):
+    from app.graph_auth import graph_auth
+    redirect_uri = settings.REDIRECT_URI or f"{str(request.base_url).rstrip('/')}/api/auth-callback"
+    return RedirectResponse(graph_auth.get_login_url(redirect_uri))
+
+
+@app.get("/api/auth-callback")
+async def auth_callback(request: Request, code: str = "", error: str = ""):
+    from app.graph_auth import graph_auth
+    if error:
+        return HTMLResponse(f"<h2>Login failed</h2><p>{error}</p>", status_code=400)
+    if not code:
+        return HTMLResponse("<h2>No authorization code received</h2>", status_code=400)
+    redirect_uri = settings.REDIRECT_URI or f"{str(request.base_url).rstrip('/')}/api/auth-callback"
+    try:
+        await graph_auth.exchange_code(code, redirect_uri)
+        return HTMLResponse(
+            "<h2>Login successful!</h2>"
+            "<p>Agile Copilot can now send messages to your Teams chats.</p>"
+            "<p>You can close this tab.</p>"
+        )
+    except Exception as e:
+        return HTMLResponse(f"<h2>Login failed</h2><p>{e}</p>", status_code=500)
+
+
+# ──────────────────────────────────────────────
+# Health check
 # ──────────────────────────────────────────────
 
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
     return {
         "status": "healthy",
         "service": "agile-copilot",
-        "subscription_active": subscription_manager.is_active,
+        "version": "2.0.0",
+        "storage": "sqlite",
+        "subscription_active": subscription_manager.is_active if settings.AZURE_CLIENT_ID else False,
     }
 
 
+# ──────────────────────────────────────────────
+# Direct EOD webhook (Power Automate / manual)
+# ──────────────────────────────────────────────
+
+
 @app.post("/api/eod-webhook", response_model=PipelineResult)
-async def eod_webhook(payload: EODPayload):
-    """
-    Receive a direct EOD payload and process it through the pipeline.
-    Used with Power Automate or manual testing.
-    """
-    metadata = extract_metadata(payload.model_dump())
-    sender = metadata["sender"]
-    clean_message = metadata["clean_message"]
-    timestamp = metadata["timestamp"]
+async def eod_webhook(payload: EODPayload, request: Request):
+    async with AsyncSessionLocal() as db:
+        metadata = extract_metadata(payload.model_dump())
+        sender = metadata["sender"]
+        clean_message = metadata["clean_message"]
+        timestamp = metadata["timestamp"]
 
-    if not validate_eod(clean_message):
-        raise HTTPException(
-            status_code=400,
-            detail="Message does not appear to be a valid EOD (no tasks found).",
-        )
+        if not validate_eod(clean_message):
+            raise HTTPException(status_code=400, detail="Not a valid EOD message.")
 
-    return await _process_eod(sender, clean_message, timestamp)
+        return await _process_eod(sender, clean_message, timestamp, db)
+
+
+# ──────────────────────────────────────────────
+# Teams Graph API webhook
+# ──────────────────────────────────────────────
 
 
 @app.get("/api/graph-webhook")
 async def graph_webhook_validation(request: Request):
-    """
-    Handle the Graph API subscription validation handshake.
-    Graph sends a GET with ?validationToken=<token> and expects it echoed back.
-    """
-    validation_token = request.query_params.get("validationToken")
-    if validation_token:
-        logger.info("Graph API validation handshake received")
-        return Response(content=validation_token, media_type="text/plain")
+    token = request.query_params.get("validationToken")
+    if token:
+        logger.info("Graph API validation handshake")
+        return Response(content=token, media_type="text/plain")
     return Response(content="OK", media_type="text/plain")
+
+
+def _workspace_id_from_client_state(client_state: str) -> int | None:
+    """
+    Parse the workspace ID from the clientState header.
+
+    New format:  "agile-copilot-{workspace_id}"  → int
+    Legacy format: "agile-copilot-secret"         → default workspace (1)
+    """
+    if client_state == "agile-copilot-secret":
+        return 1
+    if client_state.startswith("agile-copilot-"):
+        try:
+            return int(client_state.split("-")[-1])
+        except ValueError:
+            pass
+    return None
 
 
 @app.post("/api/graph-webhook")
 async def graph_webhook_notification(request: Request):
-    """
-    Receive notification from Graph API when a new message is posted
-    in the subscribed Teams channel.
-
-    Graph sends a batch of notifications; each contains the resource path
-    to the new message. We need to fetch the message content via Graph API
-    and then process it.
-    """
-    # Graph may send validation as POST with ?validationToken query param
-    validation_token = request.query_params.get("validationToken")
-    if validation_token:
-        logger.info("Graph API validation handshake received (POST)")
-        return Response(content=validation_token, media_type="text/plain")
+    token = request.query_params.get("validationToken")
+    if token:
+        return Response(content=token, media_type="text/plain")
 
     body = await request.json()
-
-    # Validate the client state to confirm it's our subscription
     notifications = body.get("value", [])
 
     for notification in notifications:
         client_state = notification.get("clientState", "")
-        if client_state != "agile-copilot-secret":
-            logger.warning("Invalid clientState in notification, skipping")
+        workspace_id = _workspace_id_from_client_state(client_state)
+        if workspace_id is None:
+            logger.warning("Unknown clientState '%s' — skipping notification", client_state)
             continue
 
         resource = notification.get("resource", "")
-        logger.info("Graph notification for resource: %s", resource)
 
-        # Dedup: skip if we've already processed this resource (message ID)
         if resource in _processed_messages:
-            logger.info("Duplicate notification for '%s' — skipping", resource)
+            logger.info("Duplicate notification '%s' — skipping", resource)
             continue
         if len(_processed_messages) > _MAX_CACHE_SIZE:
             _processed_messages.clear()
         _processed_messages.add(resource)
 
-        # Fetch the message content from Graph API
         try:
-            message_data = await _fetch_message(resource)
+            message_data = await _fetch_teams_message(resource)
         except Exception as e:
-            logger.error("Failed to fetch message from Graph: %s", e)
+            logger.error("Failed to fetch Teams message: %s", e)
             continue
 
-        # Skip messages sent by this app (bot) or via delegated token (self-loop prevention)
+        # Self-loop prevention — use workspace's own client_id if available
+        async with AsyncSessionLocal() as db:
+            ws = await crud.get_workspace(db, workspace_id)
+        ws_client_id = (ws.azure_client_id if ws else None) or settings.AZURE_CLIENT_ID
         from_info = message_data.get("from", {})
         app_info = from_info.get("application")
-        user_info = from_info.get("user")
-        if app_info and app_info.get("id") == settings.AZURE_CLIENT_ID:
-            logger.info("Skipping message sent by this app (application ID match)")
+        if app_info and app_info.get("id") == ws_client_id:
+            logger.info("Skipping bot's own message (ws=%d)", workspace_id)
             continue
-        # Skip messages from the delegated user (Yash) that contain bot signatures
         msg_body = message_data.get("body", {}).get("content", "")
         if any(tag in msg_body for tag in ["Good Morning! Daily Focus", "EOD Reminder", "WIP Task Summary"]):
-            logger.info("Skipping bot-generated message (signature detected)")
+            logger.info("Skipping bot-generated message (ws=%d)", workspace_id)
             continue
 
-        # Extract metadata
         metadata = extract_metadata(message_data)
-        logger.info("Raw HTML from Teams:\n%s", metadata["raw_message"][:500])
-        logger.info("Clean text after stripping:\n%s", metadata["clean_message"])
-
         clean = metadata["clean_message"].strip()
         sender = metadata["sender"]
 
-        # ── /backlog command ──
-        if clean.lower().startswith("/backlog"):
-            await _process_backlog_command(sender, clean)
-            continue
+        async with AsyncSessionLocal() as db:
+            if clean.lower().startswith("/backlog"):
+                await _process_backlog_command(sender, clean, db)
+                continue
 
-        # ── EOD check ──
-        if not is_eod_message(clean):
-            logger.info("Message from '%s' is not an EOD — skipping", sender)
-            continue
+            if not is_eod_message(clean):
+                logger.info("Not an EOD from '%s' — skipping", sender)
+                continue
+            if not validate_eod(clean):
+                logger.info("No valid tasks in message from '%s' — skipping", sender)
+                continue
 
-        if not validate_eod(clean):
-            logger.info("Message from '%s' has no valid tasks — skipping", sender)
-            continue
-
-        # Process the EOD
-        result = await _process_eod(
-            sender,
-            clean,
-            metadata["timestamp"],
-        )
-        logger.info(
-            "EOD processed for '%s': %d parsed, %d appended, %d updated",
-            result.member,
-            result.tasks_parsed,
-            result.tasks_appended,
-            result.tasks_updated,
-        )
+            result = await _process_eod(sender, clean, metadata["timestamp"], db, workspace_id=workspace_id)
+            logger.info(
+                "EOD processed: ws=%d member=%s parsed=%d appended=%d updated=%d",
+                workspace_id, result.member, result.tasks_parsed, result.tasks_appended, result.tasks_updated,
+            )
 
     return Response(status_code=202)
 
 
-async def _fetch_message(resource: str) -> dict:
-    """Fetch a Teams message by its Graph API resource path."""
-    import httpx
-    from app.graph_auth import graph_auth
-    from app.config import GRAPH_BASE_URL
-
-    headers = await graph_auth.get_headers()
+async def _fetch_teams_message(resource: str, workspace_id: int = 1) -> dict:
+    adapter = await _get_teams_adapter(workspace_id)
+    headers = await adapter.get_app_headers()
     url = f"{GRAPH_BASE_URL}/{resource.lstrip('/')}"
-
     async with httpx.AsyncClient(timeout=15) as client:
-        response = await client.get(url, headers=headers)
-        response.raise_for_status()
-        return response.json()
+        resp = await client.get(url, headers=headers)
+        resp.raise_for_status()
+        return resp.json()
+
+
+# ──────────────────────────────────────────────
+# Slack Events API webhook
+# ──────────────────────────────────────────────
+
+
+@app.post("/api/slack-webhook")
+async def slack_webhook(request: Request):
+    """
+    Receive Slack Events API notifications.
+    Routes to the correct workspace by matching the Slack team_id in the payload.
+    Handles:
+      - url_verification challenge
+      - message events (team member EOD / /backlog commands)
+    """
+    body_bytes = await request.body()
+    body = await request.json()
+
+    # Identify workspace by Slack team_id
+    slack_team_id = body.get("team_id", "")
+    workspace_id = 1  # default
+    slack_ws = None
+    if slack_team_id:
+        async with AsyncSessionLocal() as db:
+            slack_ws = await crud.get_workspace_by_slack_team(db, slack_team_id)
+        if slack_ws:
+            workspace_id = slack_ws.id
+
+    # Build a per-workspace SlackAdapter for signature verification
+    adapter = (
+        SlackAdapter.from_workspace(slack_ws)
+        if slack_ws
+        else SlackAdapter.from_settings()
+    )
+
+    # Verify Slack signature
+    ts = request.headers.get("x-slack-request-timestamp", "")
+    sig = request.headers.get("x-slack-signature", "")
+    if not adapter.verify_signature(body_bytes, ts, sig):
+        raise HTTPException(status_code=403, detail="Invalid Slack signature")
+
+    # URL verification challenge
+    if body.get("type") == "url_verification":
+        return {"challenge": body["challenge"]}
+
+    event = body.get("event", {})
+    if event.get("type") != "message" or event.get("subtype"):
+        return Response(status_code=200)
+    if event.get("bot_id"):
+        return Response(status_code=200)
+
+    text = event.get("text", "").strip()
+    user_id = event.get("user", "")
+    sender = await adapter.resolve_user_name(user_id) if user_id else "Unknown"
+
+    msg_id = event.get("ts", "")
+    if msg_id in _processed_messages:
+        return Response(status_code=200)
+    if len(_processed_messages) > _MAX_CACHE_SIZE:
+        _processed_messages.clear()
+    _processed_messages.add(msg_id)
+
+    async with AsyncSessionLocal() as db:
+        if text.lower().startswith("/backlog"):
+            await _process_backlog_command(sender, text, db)
+        elif is_eod_message(text) and validate_eod(text):
+            result = await _process_eod(sender, text, "", db, workspace_id=workspace_id)
+            logger.info(
+                "Slack EOD processed: ws=%d member=%s parsed=%d appended=%d",
+                workspace_id, result.member, result.tasks_parsed, result.tasks_appended,
+            )
+
+    return Response(status_code=200)
+
+
+async def _resolve_slack_user(user_id: str) -> str:
+    """Fallback for resolving Slack user without a workspace adapter."""
+    if not settings.SLACK_BOT_TOKEN:
+        return user_id
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                "https://slack.com/api/users.info",
+                headers={"Authorization": f"Bearer {settings.SLACK_BOT_TOKEN}"},
+                params={"user": user_id},
+            )
+            data = resp.json()
+            if data.get("ok"):
+                profile = data.get("user", {}).get("profile", {})
+                return profile.get("display_name") or profile.get("real_name") or user_id
+    except Exception as e:
+        logger.warning("Could not resolve Slack user %s: %s", user_id, e)
+    return user_id
+
+
+# ──────────────────────────────────────────────
+# Teams subscription management
+# ──────────────────────────────────────────────
 
 
 @app.post("/api/subscribe")
 async def create_subscription():
-    """
-    Manually create or renew the Graph API subscription for the Teams channel.
-    """
     try:
         result = await subscription_manager.ensure_active()
         return {"status": "ok", "subscription": result}
     except Exception as e:
-        logger.error("Subscription failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Subscription failed: {e}")
 
 
 # ──────────────────────────────────────────────
-# WIP notification
-# ──────────────────────────────────────────────
-
-
-async def _send_teams_message(content: str, chat_id: str | None = None) -> None:
-    """Send a message to a Teams group chat.
-
-    Uses delegated (user) token first — this works for group chats.
-    Falls back to app-only token if delegated is not available.
-    """
-    import httpx
-    from app.graph_auth import graph_auth
-    from app.config import GRAPH_BASE_URL
-
-    target = chat_id or settings.AGILE_CHAT_ID
-    if not target:
-        raise ValueError("AGILE_CHAT_ID not configured")
-
-    url = f"{GRAPH_BASE_URL}/chats/{target}/messages"
-    payload = {"body": {"contentType": "html", "content": content}}
-
-    user_headers = await graph_auth.get_user_headers()
-    if user_headers:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(url, headers=user_headers, json=payload)
-            resp.raise_for_status()
-            logger.info("Teams message sent via delegated token (chat=%s)", target)
-            return
-
-    logger.warning("No delegated token — falling back to app-only token (may 403 on group chats)")
-    headers = await graph_auth.get_headers()
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(url, headers=headers, json=payload)
-        resp.raise_for_status()
-
-
-async def _send_agile_message(content: str) -> None:
-    """Send to the agile group chat (AGILE_CHAT_ID)."""
-    await _send_teams_message(content, chat_id=settings.AGILE_CHAT_ID)
-
-
-@app.post("/api/test-message")
-async def test_message():
-    """Send a test message to the Teams group chat."""
-    await _send_teams_message("<b>Agile Copilot is live!</b> This is a test message from your AWS server.")
-    return {"status": "ok", "message": "Test message sent"}
-
-
-@app.post("/api/notify-wip")
-async def notify_wip(send: bool = True):
-    """
-    Read all member sheets, collect WIP tasks, and send a summary to Teams.
-    Use ?send=false to preview without sending.
-    """
-    members = await list_all_sheets()
-    if not members:
-        raise HTTPException(status_code=500, detail="Could not list worksheets")
-
-    all_summaries = []
-    member_data = []
-
-    for member in members:
-        try:
-            rows = await get_existing_rows(sheet_name=member)
-            wip_tasks = [r for r in rows if r.get("stage") == "WIP" and r.get("sprint_backlog")]
-            if not wip_tasks:
-                continue
-
-            # AI picks the top 5 most important tasks
-            top_tasks = await _ai_prioritize_tasks(member, wip_tasks)
-            remaining = len(wip_tasks) - len(top_tasks)
-
-            lines = []
-            task_list = []
-            for i, t in enumerate(top_tasks, 1):
-                brand = t.get("brand", "")
-                activity = t.get("activity_type", "")
-                priority = t.get("priority", "Medium")
-                name = t.get("sprint_backlog", "")
-                tag = f" ({brand} - {activity})" if brand and activity else f" ({brand or activity})" if brand or activity else ""
-                lines.append(f"{i}. {name}{tag} — {priority}")
-                task_list.append({"name": name, "brand": brand, "activity_type": activity, "priority": priority})
-
-            summary = f"<b>{member}</b> — Top {len(top_tasks)} of {len(wip_tasks)} WIP tasks:<br>" + "<br>".join(lines)
-            if remaining > 0:
-                summary += f"<br><i>+{remaining} more WIP tasks</i>"
-
-            all_summaries.append(summary)
-            member_data.append({"member": member, "wip_count": len(wip_tasks), "top_tasks": task_list})
-        except Exception as e:
-            logger.warning("Failed to read WIP for '%s': %s", member, e)
-
-    if not all_summaries:
-        return {"status": "ok", "message": "No WIP tasks found for any member", "data": []}
-
-    html = (
-        "<b>WIP Task Summary</b><br><br>"
-        + "<br><br>".join(all_summaries)
-        + "<br><br><i>Top 5 prioritized by AI based on priority, effort, and project balance.</i>"
-    )
-
-    if not send:
-        return {"status": "preview", "members": len(member_data), "data": member_data, "html": html}
-
-    try:
-        await _send_agile_message(html)
-        logger.info("WIP notification sent for %d members", len(all_summaries))
-        return {"status": "ok", "members_notified": len(all_summaries), "data": member_data}
-    except Exception as e:
-        logger.error("Failed to send Teams message: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to send Teams message: {e}")
-
-
-# ──────────────────────────────────────────────
-# EOD Reminder (6 PM)
-# ──────────────────────────────────────────────
-
-
-async def _send_eod_reminder():
-    """Send EOD reminder to the Teams group chat."""
-    members = await list_all_sheets()
-    member_list = ", ".join(members) if members else "Team"
-
-    html = (
-        "<b>EOD Reminder</b><br><br>"
-        f"Hey {member_list}! It's 6 PM — time to submit your End-of-Day update.<br><br>"
-        "Please share what you worked on today in the format:<br>"
-        "&bull; Task 1 — status<br>"
-        "&bull; Task 2 — status<br><br>"
-        "<i>Tip: mention 'done' or 'completed' for finished tasks, "
-        "'review pending' for tasks sent for approval.</i>"
-    )
-
-    await _send_teams_message(html)
-    logger.info("EOD reminder sent")
-
-
-@app.post("/api/eod-reminder")
-async def eod_reminder():
-    """Manually trigger the 6 PM EOD reminder."""
-    try:
-        await _send_eod_reminder()
-        return {"status": "ok", "message": "EOD reminder sent"}
-    except Exception as e:
-        logger.error("EOD reminder failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to send EOD reminder: {e}")
-
-
-# ──────────────────────────────────────────────
-# Morning Summary (10 AM) — AI-prioritized
+# Scheduled notification helpers
 # ──────────────────────────────────────────────
 
 
 async def _ai_prioritize_tasks(member: str, wip_tasks: list[dict]) -> list[dict]:
-    """Use Gemini to pick the top 5 tasks a member should focus on today."""
-    import json
-    import httpx
-
+    """Use Gemini to pick the top 5 most important WIP tasks for a member."""
+    import json, httpx
     if not settings.GEMINI_API_KEY or len(wip_tasks) <= 5:
         return wip_tasks[:5]
 
-    task_lines = []
-    for t in wip_tasks:
-        brand = t.get("brand", "")
-        activity = t.get("activity_type", "")
-        priority = t.get("priority", "")
-        name = t.get("sprint_backlog", "")
-        sp = t.get("expected_story_points", 0)
-        task_lines.append(f"- {name} (brand: {brand}, activity: {activity}, priority: {priority}, story points: {sp})")
-
+    task_lines = [
+        f"- {t.get('sprint_backlog', '')} "
+        f"(brand: {t.get('brand','')}, priority: {t.get('priority','')}, sp: {t.get('expected_story_points',0)})"
+        for t in wip_tasks
+    ]
     prompt = (
-        f"You are an agile project manager. {member} has these WIP tasks:\n\n"
+        f"You are an agile PM. {member} has these WIP tasks:\n\n"
         + "\n".join(task_lines)
-        + "\n\nPick the TOP 5 tasks they should focus on today, considering:\n"
-        "- High priority tasks first\n"
-        "- Tasks with higher story points (larger effort = start early)\n"
-        "- Deadlines and dependencies\n"
-        "- Balance across brands/projects\n\n"
-        "Return ONLY a JSON array of the task names (exact strings), ordered by priority. "
-        "Example: [\"Task A\", \"Task B\", \"Task C\", \"Task D\", \"Task E\"]"
+        + "\n\nPick the TOP 5 to focus on today. "
+        "Return ONLY a JSON array of exact task names, ordered by priority."
     )
-
     try:
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
             f"gemini-2.5-flash:generateContent?key={settings.GEMINI_API_KEY}"
         )
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "responseMimeType": "application/json",
-            },
-        }
-
         async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(url, json=payload)
+            resp = await client.post(
+                url,
+                json={"contents": [{"parts": [{"text": prompt}]}],
+                      "generationConfig": {"responseMimeType": "application/json"}},
+            )
             resp.raise_for_status()
-            data = resp.json()
-
-        text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "[]")
+            text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
         top_names = json.loads(text)
-
         if not isinstance(top_names, list):
             return wip_tasks[:5]
-
-        # Reorder wip_tasks by AI's priority
-        name_to_task = {t["sprint_backlog"]: t for t in wip_tasks}
-        ordered = []
-        for name in top_names[:5]:
-            if name in name_to_task:
-                ordered.append(name_to_task[name])
+        name_map = {t["sprint_backlog"]: t for t in wip_tasks}
+        ordered = [name_map[n] for n in top_names[:5] if n in name_map]
         return ordered if ordered else wip_tasks[:5]
-
     except Exception as e:
-        logger.warning("AI prioritization failed for %s: %s, using default order", member, e)
+        logger.warning("AI prioritization failed for %s: %s", member, e)
         return wip_tasks[:5]
 
 
-async def _send_agile_reminder():
-    """Send a reminder to update the agile sheet."""
-    members = await list_all_sheets()
-    member_list = ", ".join(members) if members else "Team"
-    html = f"<b>Agile Update Reminder</b> — Hey {member_list}! Please update your agile sheet."
-    await _send_agile_message(html)
-    logger.info("Agile update reminder sent")
-
-
-async def _send_morning_summary():
-    """Build and send the AI-prioritized morning WIP summary."""
-    members = await list_all_sheets()
-    if not members:
-        return
-
-    all_summaries = []
-
-    for member in members:
-        try:
-            rows = await get_existing_rows(sheet_name=member)
-            wip_tasks = [r for r in rows if r.get("stage") == "WIP" and r.get("sprint_backlog")]
-            if not wip_tasks:
-                continue
-
-            # AI picks top 5
-            top_tasks = await _ai_prioritize_tasks(member, wip_tasks)
-
-            lines = []
-            for i, t in enumerate(top_tasks, 1):
-                brand = t.get("brand", "")
-                activity = t.get("activity_type", "")
-                name = t.get("sprint_backlog", "")
-                tag = f" ({brand} - {activity})" if brand and activity else f" ({brand or activity})" if brand or activity else ""
-                lines.append(f"{i}. {name}{tag}")
-
-            remaining = len(wip_tasks) - len(top_tasks)
-            task_word = "task" if len(top_tasks) == 1 else "tasks"
-            summary = f"<b>{member}</b> — Top {len(top_tasks)} focus {task_word}:<br>" + "<br>".join(lines)
-            if remaining > 0:
-                summary += f"<br><i>+{remaining} more WIP tasks</i>"
-
-            all_summaries.append(summary)
-        except Exception as e:
-            logger.warning("Failed morning summary for '%s': %s", member, e)
-
-    if not all_summaries:
-        return
-
-    today = date.today().strftime("%A, %B %d")
-    html = (
-        f"<b>Good Morning! Daily Focus — {today}</b><br><br>"
-        + "<br><br>".join(all_summaries)
-        + "<br><br><i>Prioritized by AI based on effort, priority, and project balance.</i>"
-    )
-
-    await _send_agile_message(html)
-    logger.info("Morning summary sent for %d members", len(all_summaries))
-
-
-@app.post("/api/agile-reminder")
-async def agile_reminder():
-    """Manually trigger the 10:15 AM agile update reminder."""
-    try:
-        await _send_agile_reminder()
-        return {"status": "ok", "message": "Agile update reminder sent"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed: {e}")
-
-
-@app.post("/api/morning-summary")
-async def morning_summary(send: bool = True):
-    """Manually trigger the 9:30 AM todo summary. Use ?send=false to preview."""
-    members = await list_all_sheets()
-    if not members:
-        raise HTTPException(status_code=500, detail="Could not list worksheets")
-
-    member_data = []
-
-    for member in members:
-        try:
-            rows = await get_existing_rows(sheet_name=member)
-            wip_tasks = [r for r in rows if r.get("stage") == "WIP" and r.get("sprint_backlog")]
-            if not wip_tasks:
-                continue
-
-            top_tasks = await _ai_prioritize_tasks(member, wip_tasks)
-            task_list = [
-                {"name": t.get("sprint_backlog", ""), "brand": t.get("brand", ""),
-                 "activity_type": t.get("activity_type", "")}
-                for t in top_tasks
-            ]
-            member_data.append({
-                "member": member,
-                "total_wip": len(wip_tasks),
-                "top_5": task_list,
-            })
-        except Exception as e:
-            logger.warning("Failed morning summary for '%s': %s", member, e)
-
-    if not member_data:
-        return {"status": "ok", "message": "No WIP tasks found", "data": []}
-
-    if not send:
-        return {"status": "preview", "members": len(member_data), "data": member_data}
-
-    try:
-        await _send_morning_summary()
-        return {"status": "ok", "members_notified": len(member_data), "data": member_data}
-    except Exception as e:
-        logger.error("Morning summary failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to send morning summary: {e}")
-
-
-# ──────────────────────────────────────────────
-# Progress Report
-# ──────────────────────────────────────────────
-
-
 def _progress_bar(actual: int, expected: int, width: int = 10) -> str:
-    """Return a simple text progress bar."""
     if expected <= 0:
         return "░" * width
     pct = min(actual / expected, 1.0)
@@ -876,119 +673,183 @@ def _progress_bar(actual: int, expected: int, width: int = 10) -> str:
     return "█" * filled + "░" * (width - filled)
 
 
+async def _send_eod_reminder():
+    async with AsyncSessionLocal() as db:
+        members = await crud.list_members(db)
+    member_list = ", ".join(members) if members else "Team"
+    html = (
+        "<b>EOD Reminder</b><br><br>"
+        f"Hey {member_list}! It's 6 PM — time to submit your End-of-Day update.<br><br>"
+        "Please share what you worked on today in the format:<br>"
+        "&bull; Task 1 — status<br>"
+        "&bull; Task 2 — status"
+    )
+    await _send_agile_message(html)
+    logger.info("EOD reminder sent")
+
+
+async def _send_agile_reminder():
+    async with AsyncSessionLocal() as db:
+        members = await crud.list_members(db)
+    member_list = ", ".join(members) if members else "Team"
+    html = f"<b>Agile Update Reminder</b> — Hey {member_list}! Please update your agile sheet."
+    await _send_agile_message(html)
+
+
+async def _send_morning_summary():
+    async with AsyncSessionLocal() as db:
+        wip_data = await crud.get_wip_summary(db)
+
+    if not wip_data:
+        return
+
+    all_summaries = []
+    for entry in wip_data:
+        member = entry["member"]
+        wip_tasks = entry["wip_tasks"]
+        top = await _ai_prioritize_tasks(member, wip_tasks)
+        lines = []
+        for i, t in enumerate(top, 1):
+            brand = t.get("brand", "")
+            activity = t.get("activity_type", "")
+            name = t.get("sprint_backlog", "")
+            tag = f" ({brand} - {activity})" if brand and activity else f" ({brand or activity})" if brand or activity else ""
+            lines.append(f"{i}. {name}{tag}")
+        remaining = len(wip_tasks) - len(top)
+        summary = f"<b>{member}</b> — Top {len(top)} focus tasks:<br>" + "<br>".join(lines)
+        if remaining > 0:
+            summary += f"<br><i>+{remaining} more WIP tasks</i>"
+        all_summaries.append(summary)
+
+    today = date.today().strftime("%A, %B %d")
+    html = (
+        f"<b>Good Morning! Daily Focus — {today}</b><br><br>"
+        + "<br><br>".join(all_summaries)
+        + "<br><br><i>Prioritized by AI based on effort, priority, and project balance.</i>"
+    )
+    await _send_agile_message(html)
+    logger.info("Morning summary sent for %d members", len(all_summaries))
+
+
 async def _send_progress_report():
-    """Read all member sheets and send actual vs expected story point progress."""
-    members = await list_all_sheets()
-    if not members:
+    async with AsyncSessionLocal() as db:
+        progress = await crud.get_sprint_progress(db)
+
+    if not progress:
         return
 
     lines = []
-    total_actual = 0
-    total_expected = 0
-
-    for member in members:
-        try:
-            rows = await get_existing_rows(sheet_name=member)
-            # Exclude the total/summary row if present (sprint_backlog contains "total")
-            task_rows = [r for r in rows if "total" not in r.get("sprint_backlog", "").lower()]
-            exp = sum(r.get("expected_story_points", 0) for r in task_rows)
-            act = sum(r.get("actual_story_points", 0) for r in task_rows)
-            closed = sum(1 for r in task_rows if r.get("stage") == "Closed")
-            total_tasks = len(task_rows)
-
-            if exp == 0 and total_tasks == 0:
-                continue
-
-            pct = round((act / exp) * 100) if exp > 0 else 0
-            bar = _progress_bar(act, exp)
-            lines.append(
-                f"<b>{member}</b> — {act}/{exp} SP ({pct}%) {bar} &nbsp;|&nbsp; "
-                f"{closed}/{total_tasks} tasks closed"
-            )
-            total_actual += act
-            total_expected += exp
-        except Exception as e:
-            logger.warning("Failed progress for '%s': %s", member, e)
-
-    if not lines:
-        return
+    total_actual = total_expected = 0
+    for p in progress:
+        exp, act = p["expected_sp"], p["actual_sp"]
+        pct = p["pct"]
+        bar = _progress_bar(act, exp)
+        lines.append(
+            f"<b>{p['member']}</b> — {act}/{exp} SP ({pct}%) {bar} &nbsp;|&nbsp; "
+            f"{p['closed']}/{p['total_tasks']} tasks closed"
+        )
+        total_actual += act
+        total_expected += exp
 
     today = date.today().strftime("%A, %B %d")
     team_pct = round((total_actual / total_expected) * 100) if total_expected > 0 else 0
     team_bar = _progress_bar(total_actual, total_expected)
-
     html = (
         f"<b>Sprint Progress — {today}</b><br><br>"
         + "<br>".join(lines)
         + f"<br><br><b>Team Total — {total_actual}/{total_expected} SP ({team_pct}%) {team_bar}</b>"
     )
-
     await _send_agile_message(html)
-    logger.info("Progress report sent for %d members", len(lines))
+    logger.info("Progress report sent")
+
+
+# ──────────────────────────────────────────────
+# Manual trigger endpoints
+# ──────────────────────────────────────────────
+
+
+@app.post("/api/test-message")
+async def test_message():
+    await _send_teams_message("<b>Agile Copilot 2.0 is live!</b> Storage migrated to SQLite. 🎉")
+    return {"status": "ok"}
+
+
+@app.post("/api/eod-reminder")
+async def eod_reminder():
+    try:
+        await _send_eod_reminder()
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/agile-reminder")
+async def agile_reminder():
+    try:
+        await _send_agile_reminder()
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/morning-summary")
+async def morning_summary(send: bool = True):
+    async with AsyncSessionLocal() as db:
+        wip_data = await crud.get_wip_summary(db)
+    if not wip_data:
+        return {"status": "ok", "message": "No WIP tasks found", "data": []}
+    if not send:
+        return {"status": "preview", "data": wip_data}
+    try:
+        await _send_morning_summary()
+        return {"status": "ok", "members_notified": len(wip_data), "data": wip_data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/progress-report")
 async def progress_report(send: bool = True):
-    """Send sprint progress report (actual vs expected story points) to Teams."""
-    members = await list_all_sheets()
-    if not members:
-        raise HTTPException(status_code=500, detail="Could not list worksheets")
-
-    report_data = []
-    total_actual = 0
-    total_expected = 0
-
-    for member in members:
-        try:
-            rows = await get_existing_rows(sheet_name=member)
-            task_rows = [r for r in rows if "total" not in r.get("sprint_backlog", "").lower()]
-            exp = sum(r.get("expected_story_points", 0) for r in task_rows)
-            act = sum(r.get("actual_story_points", 0) for r in task_rows)
-            closed = sum(1 for r in task_rows if r.get("stage") == "Closed")
-            report_data.append({
-                "member": member,
-                "actual_sp": act,
-                "expected_sp": exp,
-                "pct": round((act / exp) * 100) if exp > 0 else 0,
-                "closed_tasks": closed,
-                "total_tasks": len(task_rows),
-            })
-            total_actual += act
-            total_expected += exp
-        except Exception as e:
-            logger.warning("Failed progress for '%s': %s", member, e)
-
+    async with AsyncSessionLocal() as db:
+        data = await crud.get_sprint_progress(db)
     if not send:
-        return {
-            "status": "preview",
-            "team_actual_sp": total_actual,
-            "team_expected_sp": total_expected,
-            "data": report_data,
-        }
-
+        return {"status": "preview", "data": data}
     try:
         await _send_progress_report()
-        return {
-            "status": "ok",
-            "team_actual_sp": total_actual,
-            "team_expected_sp": total_expected,
-            "data": report_data,
-        }
+        return {"status": "ok", "data": data}
     except Exception as e:
-        logger.error("Progress report failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to send progress report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/notify-wip")
+async def notify_wip(send: bool = True):
+    async with AsyncSessionLocal() as db:
+        wip_data = await crud.get_wip_summary(db)
+    if not wip_data:
+        return {"status": "ok", "message": "No WIP tasks", "data": []}
+    if not send:
+        return {"status": "preview", "data": wip_data}
+    all_summaries = []
+    for entry in wip_data:
+        member = entry["member"]
+        wip_tasks = entry["wip_tasks"]
+        top = await _ai_prioritize_tasks(member, wip_tasks)
+        lines = [
+            f"{i}. {t.get('sprint_backlog','')} ({t.get('brand','')} - {t.get('activity_type','')})"
+            for i, t in enumerate(top, 1)
+        ]
+        all_summaries.append(f"<b>{member}</b>:<br>" + "<br>".join(lines))
+    html = "<b>WIP Task Summary</b><br><br>" + "<br><br>".join(all_summaries)
+    try:
+        await _send_agile_message(html)
+        return {"status": "ok", "data": wip_data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ──────────────────────────────────────────────
-# Run with uvicorn
+# Entry point
 # ──────────────────────────────────────────────
 
 if __name__ == "__main__":
     import uvicorn
-
-    uvicorn.run(
-        "app.main:app",
-        host=settings.HOST,
-        port=settings.PORT,
-        reload=True,
-    )
+    uvicorn.run("app.main:app", host=settings.HOST, port=settings.PORT, reload=True)

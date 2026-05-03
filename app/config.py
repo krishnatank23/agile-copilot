@@ -38,6 +38,13 @@ class Settings(BaseSettings):
         description="OAuth redirect URI for delegated auth (e.g. https://your-server.com/api/auth-callback)",
     )
 
+    # --- Slack ---
+    SLACK_BOT_TOKEN: str = Field(default="", description="Slack bot OAuth token (xoxb-...) — used for default workspace")
+    SLACK_SIGNING_SECRET: str = Field(default="", description="Slack app signing secret")
+    SLACK_CHANNEL_ID: str = Field(default="", description="Slack channel ID for notifications")
+    SLACK_CLIENT_ID: str = Field(default="", description="Slack app client ID (for OAuth install flow)")
+    SLACK_CLIENT_SECRET: str = Field(default="", description="Slack app client secret (for OAuth install flow)")
+
     # --- Server ---
     HOST: str = Field(default="0.0.0.0", description="Server host")
     PORT: int = Field(default=8000, description="Server port")

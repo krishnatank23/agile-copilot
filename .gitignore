@@ -1,17 +1,42 @@
+# ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.env
-.env.local
 *.egg-info/
 dist/
 build/
 .eggs/
+.mypy_cache/
+.pytest_cache/
+*.log
+
+# ── Virtual environments ───────────────────────────────────────────────────────
 venv/
 .venv/
 env/
-.pytest_cache/
-.mypy_cache/
-*.log
-delegated_token.json
+
+# ── Secrets & credentials ──────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+tokens/
+delegated_token*.json
+
+# ── Database ───────────────────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Next.js ───────────────────────────────────────────────────────────────────
+frontend/.next/
+frontend/out/
+frontend/node_modules/
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
