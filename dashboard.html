@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agile Copilot — Dashboard</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#09090f;--surface:#11111b;--surface2:#161622;
+  --border:rgba(255,255,255,0.07);--border-h:rgba(217,70,239,0.25);
+  --accent:#d946ef;--accent2:#9333ea;
+  --grad:linear-gradient(135deg,#d946ef,#9333ea);
+  --t1:#f1f5f9;--t2:#94a3b8;--t3:#475569;
+  --green:#10b981;--blue:#3b82f6;--amber:#f59e0b;--red:#ef4444;--purple:#8b5cf6;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;background:var(--bg);color:var(--t1);min-height:100vh;display:flex;-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;top:0;left:0;width:560px;height:560px;background:radial-gradient(ellipse at 0% 0%,rgba(147,51,234,0.13) 0%,transparent 65%);pointer-events:none;z-index:0}
+
+/* ── SIDEBAR ── */
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:228px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:20}
+.sb-brand{display:flex;align-items:center;gap:10px;padding:20px 18px;border-bottom:1px solid var(--border)}
+.sb-icon{width:34px;height:34px;background:var(--grad);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 0 18px rgba(217,70,239,0.35);flex-shrink:0}
+.sb-title{font-size:14.5px;font-weight:700;color:var(--t1);letter-spacing:-.3px}
+.sb-sub{font-size:10px;color:var(--t3);margin-top:1px}
+.sb-nav{flex:1;padding:14px 10px;overflow-y:auto}
+.sb-nav::-webkit-scrollbar{display:none}
+.nav-label{font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:1px;padding:0 8px;margin:14px 0 5px}
+.nav-label:first-child{margin-top:2px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:7px;font-size:13px;font-weight:500;color:var(--t3);cursor:pointer;transition:all .15s;margin-bottom:1px;border:1px solid transparent}
+.nav-item:hover{background:rgba(255,255,255,0.04);color:var(--t2)}
+.nav-item.active{background:rgba(217,70,239,0.11);color:#e879f9;border-color:rgba(217,70,239,0.18)}
+.nav-item svg{width:15px;height:15px;flex-shrink:0}
+.nav-badge{margin-left:auto;background:rgba(217,70,239,0.18);color:#e879f9;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px}
+.sb-footer{padding:12px 10px;border-top:1px solid var(--border)}
+.user-row{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;cursor:pointer;transition:background .15s}
+.user-row:hover{background:rgba(255,255,255,0.04)}
+.user-ava{width:30px;height:30px;border-radius:50%;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.user-meta strong{display:block;font-size:12px;color:var(--t1)}
+.user-meta span{font-size:10.5px;color:var(--t3)}
+
+/* ── MAIN ── */
+.main{margin-left:228px;flex:1;display:flex;flex-direction:column;position:relative;z-index:1;min-width:0}
+
+/* Topbar */
+.topbar{position:sticky;top:0;background:rgba(9,9,15,0.88);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:13px 26px;z-index:10}
+.tb-left h1{font-size:19px;font-weight:700;color:var(--t1);letter-spacing:-.5px}
+.tb-left p{font-size:11.5px;color:var(--t3);margin-top:2px}
+.tb-right{display:flex;align-items:center;gap:9px}
+.tb-btn{display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:7px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--t2);transition:all .15s}
+.tb-btn:hover{background:rgba(255,255,255,0.08);color:var(--t1)}
+.tb-btn svg{width:13px;height:13px}
+.tb-divider{width:1px;height:22px;background:var(--border)}
+.tb-notif{width:33px;height:33px;border-radius:7px;background:rgba(255,255,255,0.04);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;color:var(--t2);transition:all .15s}
+.tb-notif:hover{background:rgba(255,255,255,0.08)}
+.tb-notif svg{width:14px;height:14px}
+.notif-dot{position:absolute;top:7px;right:7px;width:5px;height:5px;border-radius:50%;background:var(--accent);border:1.5px solid var(--bg)}
+.sprint-pill{display:flex;align-items:center;gap:5px;padding:5px 11px;border-radius:7px;border:1px solid rgba(217,70,239,0.22);background:rgba(217,70,239,0.07);font-size:12px;color:#e879f9;font-weight:500;cursor:pointer}
+.sprint-pill svg{width:13px;height:13px}
+
+/* Content */
+.content{padding:22px 26px}
+
+/* ── METRIC CARDS ── */
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:22px}
+.mc{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;position:relative;overflow:hidden;transition:border-color .2s,transform .2s;cursor:default}
+.mc:hover{border-color:var(--border-h);transform:translateY(-1px)}
+.mc::after{content:'';position:absolute;bottom:-18px;right:-18px;width:80px;height:80px;border-radius:50%;opacity:.09}
+.mc-g::after{background:var(--green)}
+.mc-p::after{background:var(--accent)}
+.mc-a::after{background:var(--amber)}
+.mc-b::after{background:var(--blue)}
+.mc-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:11px}
+.mc-label{font-size:11px;font-weight:500;color:var(--t3);text-transform:uppercase;letter-spacing:.5px}
+.mc-ico{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center}
+.mc-ico svg{width:14px;height:14px}
+.mc-ico.g{background:rgba(16,185,129,.12);color:var(--green)}
+.mc-ico.p{background:rgba(217,70,239,.12);color:var(--accent)}
+.mc-ico.a{background:rgba(245,158,11,.12);color:var(--amber)}
+.mc-ico.b{background:rgba(59,130,246,.12);color:var(--blue)}
+.mc-val{font-size:30px;font-weight:800;color:var(--t1);letter-spacing:-1px;line-height:1;margin-bottom:6px}
+.mc-val sup{font-size:14px;color:var(--t3);font-weight:400;vertical-align:middle;margin-left:2px}
+.mc-sub{display:flex;align-items:center;gap:4px;font-size:11.5px}
+.mc-sub svg{width:11px;height:11px}
+.mc-sub.up{color:var(--green)}
+.mc-sub.down{color:var(--red)}
+.mc-sub.neutral{color:var(--t3)}
+.mc-sub span{color:var(--t3)}
+
+/* ── TABLE CARD ── */
+.tbl-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.tbl-hdr{display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--border)}
+.tbl-hdr-l h2{font-size:14px;font-weight:600;color:var(--t1)}
+.tbl-hdr-l p{font-size:11.5px;color:var(--t3);margin-top:2px}
+.tbl-hdr-r{display:flex;align-items:center;gap:8px}
+.srch{display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:rgba(255,255,255,0.03)}
+.srch svg{width:13px;height:13px;color:var(--t3);flex-shrink:0}
+.srch input{background:none;border:none;outline:none;font-size:12px;color:var(--t1);width:150px}
+.srch input::placeholder{color:var(--t3)}
+.sm-btn{display:flex;align-items:center;gap:5px;padding:6px 10px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:rgba(255,255,255,0.03);color:var(--t2);transition:all .15s}
+.sm-btn:hover{background:rgba(255,255,255,0.07)}
+.sm-btn svg{width:12px;height:12px}
+
+/* Chips */
+.chips{display:flex;align-items:center;gap:5px;padding:10px 18px;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip-lbl{font-size:10.5px;color:var(--t3);font-weight:500;margin-right:2px;flex-shrink:0;white-space:nowrap}
+.chip{padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:500;cursor:pointer;border:1px solid var(--border);color:var(--t3);background:transparent;white-space:nowrap;transition:all .15s;flex-shrink:0}
+.chip:hover{background:rgba(255,255,255,0.04);color:var(--t2)}
+.chip.on{background:rgba(217,70,239,0.12);border-color:rgba(217,70,239,0.25);color:#e879f9}
+.chip-sep{width:1px;height:15px;background:var(--border);flex-shrink:0;margin:0 3px}
+
+/* Table */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+thead tr{background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border)}
+th{padding:9px 13px;text-align:left;font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.6px;white-space:nowrap}
+th.c{text-align:center}
+td{padding:11px 13px;border-bottom:1px solid rgba(255,255,255,0.032);color:var(--t2);vertical-align:middle;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tbody tr{cursor:pointer;transition:background .12s}
+tbody tr:hover{background:rgba(255,255,255,0.025)}
+.row-wip td:first-child{padding-left:10px;border-left:3px solid var(--blue)}
+.row-approved td:first-child{padding-left:10px;border-left:3px solid var(--amber)}
+.row-closed td:first-child{padding-left:10px;border-left:3px solid var(--green)}
+.row-backlog td:first-child{padding-left:10px;border-left:3px solid var(--purple)}
+
+/* Cells */
+.mem-cell{display:flex;align-items:center;gap:8px}
+.ava{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0}
+.mem-name{font-weight:500;color:var(--t1);font-size:12.5px}
+.brand-tag{display:inline-flex;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
+.act-tag{display:inline-flex;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;background:rgba(255,255,255,0.06);color:var(--t2)}
+.task-name{max-width:210px;font-weight:500;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stt{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600}
+.stt-dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0}
+.stt.wip{background:rgba(59,130,246,.12);color:#60a5fa}
+.stt.approved{background:rgba(245,158,11,.12);color:#fbbf24}
+.stt.closed{background:rgba(16,185,129,.12);color:#34d399}
+.stt.backlog{background:rgba(139,92,246,.12);color:#a78bfa}
+.pri{font-size:12px;display:flex;align-items:center;gap:4px}
+.pri-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.pri.high{color:#f87171}.pri.high .pri-dot{background:#f87171}
+.pri.medium{color:#fbbf24}.pri.medium .pri-dot{background:#fbbf24}
+.pri.low{color:var(--t3)}.pri.low .pri-dot{background:var(--t3)}
+.dl{font-size:12px;color:var(--t3)}
+.dep-text{font-size:11.5px;color:#f87171;max-width:140px;overflow:hidden;text-overflow:ellipsis}
+.dep-none{color:var(--t3)}
+.sp-cell{font-size:12px;color:var(--t3);text-align:center}
+.sp-cell strong{color:var(--t1)}
+.cmt-cell{font-size:11.5px;color:var(--t3);max-width:130px;overflow:hidden;text-overflow:ellipsis}
+.cmt-adhoc{color:#f87171}
+.cmt-bl{color:#a78bfa}
+
+/* Footer summary */
+.tbl-foot{display:flex;align-items:center;gap:18px;padding:11px 18px;border-top:1px solid var(--border);background:rgba(255,255,255,0.015);flex-wrap:wrap}
+.tbl-stat{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--t3)}
+.tbl-stat strong{color:var(--t2)}
+.tbl-sep{width:1px;height:13px;background:var(--border)}
+
+/* Empty state */
+.empty{padding:48px 20px;text-align:center;color:var(--t3);font-size:13px}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sb-brand">
+    <div class="sb-icon">⚡</div>
+    <div>
+      <div class="sb-title">Agile Copilot</div>
+      <div class="sb-sub">World Goods Market</div>
+    </div>
+  </div>
+
+  <nav class="sb-nav">
+    <div class="nav-label">Menu</div>
+
+    <div class="nav-item active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+      Dashboard
+    </div>
+
+    <div class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><polyline points="4 6 5 7 7 5"/><polyline points="4 12 5 13 7 11"/><polyline points="4 18 5 19 7 17"/></svg>
+      Tasks
+      <span class="nav-badge">14</span>
+    </div>
+
+    <div class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      EOD Feed
+      <span class="nav-badge">3</span>
+    </div>
+
+    <div class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Members
+    </div>
+
+    <div class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      Analytics
+    </div>
+
+    <div class="nav-label">Workspace</div>
+
+    <div class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22v-5"/><path d="M9 7V2"/><path d="M15 7V2"/><path d="M18 7H6a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/></svg>
+      Integrations
+    </div>
+
+    <div class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Settings
+    </div>
+  </nav>
+
+  <div class="sb-footer">
+    <div class="user-row">
+      <div class="user-ava">Y</div>
+      <div class="user-meta">
+        <strong>Yash Suthar</strong>
+        <span>yashurathore2001</span>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="tb-left">
+      <h1>Dashboard</h1>
+      <p>Sprint Apr 16 – Apr 30, 2026 &nbsp;·&nbsp; 10 members active</p>
+    </div>
+    <div class="tb-right">
+      <div class="sprint-pill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Apr 16 – 30
+      </div>
+      <div class="tb-divider"></div>
+      <button class="tb-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+        Filters
+      </button>
+      <button class="tb-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export
+      </button>
+      <div class="tb-divider"></div>
+      <div class="tb-notif">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <div class="notif-dot"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content">
+
+    <!-- METRIC CARDS -->
+    <div class="metrics">
+      <div class="mc mc-g">
+        <div class="mc-top">
+          <div class="mc-label">Completed Tasks</div>
+          <div class="mc-ico g">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </div>
+        <div class="mc-val">47</div>
+        <div class="mc-sub up">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+          +8 this sprint &nbsp;<span>vs last</span>
+        </div>
+      </div>
+
+      <div class="mc mc-p">
+        <div class="mc-top">
+          <div class="mc-label">Completion Rate</div>
+          <div class="mc-ico p">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          </div>
+        </div>
+        <div class="mc-val">68<sup>%</sup></div>
+        <div class="mc-sub up">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+          +5% &nbsp;<span>vs last sprint</span>
+        </div>
+      </div>
+
+      <div class="mc mc-a">
+        <div class="mc-top">
+          <div class="mc-label">Pending Approvals</div>
+          <div class="mc-ico a">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+        </div>
+        <div class="mc-val">12</div>
+        <div class="mc-sub down">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>
+          3 overdue &nbsp;<span>need action</span>
+        </div>
+      </div>
+
+      <div class="mc mc-b">
+        <div class="mc-top">
+          <div class="mc-label">Team Overview</div>
+          <div class="mc-ico b">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+        </div>
+        <div class="mc-val">8<sup>/ 10</sup></div>
+        <div class="mc-sub neutral">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          2 no EOD today
+        </div>
+      </div>
+    </div>
+
+    <!-- TABLE CARD -->
+    <div class="tbl-card">
+
+      <div class="tbl-hdr">
+        <div class="tbl-hdr-l">
+          <h2>Sprint Tasks</h2>
+          <p id="row-count">Showing all 14 tasks · Apr 16 – Apr 30</p>
+        </div>
+        <div class="tbl-hdr-r">
+          <div class="srch">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input id="search-input" type="text" placeholder="Search tasks, members, brands…">
+          </div>
+          <button class="sm-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+            Sort
+          </button>
+        </div>
+      </div>
+
+      <!-- Filter chips -->
+      <div class="chips">
+        <span class="chip-lbl">Member:</span>
+        <div class="chip on" data-member="all">All</div>
+        <div class="chip" data-member="Dhwani">Dhwani</div>
+        <div class="chip" data-member="Shaily">Shaily</div>
+        <div class="chip" data-member="Shriya">Shriya</div>
+        <div class="chip" data-member="Ravi">Ravi</div>
+        <div class="chip" data-member="Yash">Yash</div>
+        <div class="chip" data-member="Yogini">Yogini</div>
+        <div class="chip" data-member="Kriishna">Kriishna</div>
+        <div class="chip" data-member="Harshil">Harshil</div>
+        <div class="chip" data-member="Rinal">Rinal</div>
+        <div class="chip" data-member="Prince">Prince</div>
+        <div class="chip-sep"></div>
+        <span class="chip-lbl">Status:</span>
+        <div class="chip" data-status="WIP">WIP</div>
+        <div class="chip" data-status="Approved">Approved</div>
+        <div class="chip" data-status="Closed">Closed</div>
+        <div class="chip" data-status="Backlog">Backlog</div>
+      </div>
+
+      <!-- Table -->
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Member</th>
+              <th>Brand</th>
+              <th>Activity Type</th>
+              <th>Sprint Backlog</th>
+              <th>Status</th>
+              <th>Priority</th>
+              <th>Deadline</th>
+              <th>Dependency</th>
+              <th class="c">Exp SP</th>
+              <th class="c">Act SP</th>
+              <th>Comments</th>
+            </tr>
+          </thead>
+          <tbody id="task-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="tbl-foot" id="tbl-foot"></div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+const MEMBERS = {
+  Dhwani:   { color:'#d946ef', i:'DH' },
+  Shaily:   { color:'#8b5cf6', i:'SH' },
+  Shriya:   { color:'#3b82f6', i:'SR' },
+  Ravi:     { color:'#10b981', i:'RV' },
+  Yash:     { color:'#f59e0b', i:'Y'  },
+  Yogini:   { color:'#ec4899', i:'YO' },
+  Kriishna: { color:'#06b6d4', i:'KR' },
+  Harshil:  { color:'#f97316', i:'H'  },
+  Rinal:    { color:'#14b8a6', i:'RI' },
+  Prince:   { color:'#6366f1', i:'PR' },
+};
+
+const BRANDS = {
+  Wogom:      { bg:'rgba(139,92,246,.15)',  c:'#a78bfa' },
+  Schneider:  { bg:'rgba(59,130,246,.15)',  c:'#60a5fa' },
+  Brandverse: { bg:'rgba(236,72,153,.15)',  c:'#f472b6' },
+  WDV:        { bg:'rgba(6,182,212,.15)',   c:'#22d3ee' },
+  Internal:   { bg:'rgba(100,116,139,.15)', c:'#94a3b8' },
+  Abaj:       { bg:'rgba(249,115,22,.15)',  c:'#fb923c' },
+  WEMS:       { bg:'rgba(20,184,166,.15)',  c:'#2dd4bf' },
+  Mediaverse: { bg:'rgba(99,102,241,.15)',  c:'#818cf8' },
+};
+
+const TASKS = [
+  { member:'Dhwani',   brand:'Schneider',  act:'Content',           task:'Catalogue content changes',        status:'WIP',      pri:'High',   dl:'Apr 30', dep:'',                          expSP:3, actSP:'', cmt:'' },
+  { member:'Dhwani',   brand:'Wogom',      act:'Social Media',      task:'Banner reference docs',            status:'Closed',   pri:'Medium', dl:'Apr 28', dep:'',                          expSP:2, actSP:2,  cmt:'x2' },
+  { member:'Shriya',   brand:'Brandverse', act:'Branding',          task:'Brand identity setup testing',     status:'WIP',      pri:'High',   dl:'Apr 30', dep:'',                          expSP:5, actSP:'', cmt:'' },
+  { member:'Shriya',   brand:'Internal',   act:'Ops',               task:'Homepage slider fix',              status:'Closed',   pri:'Low',    dl:'Apr 27', dep:'',                          expSP:1, actSP:1,  cmt:'Adhoc task' },
+  { member:'Yash',     brand:'WDV',        act:'Website',           task:'Product page layout revision',     status:'WIP',      pri:'High',   dl:'Apr 30', dep:'Waiting for design assets',  expSP:5, actSP:'', cmt:'' },
+  { member:'Yash',     brand:'Wogom',      act:'Social Media',      task:'Social media creatives Apr batch', status:'Closed',   pri:'Medium', dl:'Apr 29', dep:'',                          expSP:2, actSP:2,  cmt:'' },
+  { member:'Ravi',     brand:'Abaj',       act:'Collateral',        task:'Product catalogue design',         status:'Approved', pri:'High',   dl:'Apr 30', dep:'',                          expSP:8, actSP:'', cmt:'' },
+  { member:'Ravi',     brand:'WEMS',       act:'Digital Marketing', task:'Email campaign template',          status:'Approved', pri:'Medium', dl:'Apr 30', dep:'',                          expSP:3, actSP:'', cmt:'' },
+  { member:'Shaily',   brand:'Schneider',  act:'Content',           task:'Product descriptions update',      status:'WIP',      pri:'Medium', dl:'Apr 30', dep:'',                          expSP:3, actSP:'', cmt:'From backlog' },
+  { member:'Yogini',   brand:'Brandverse', act:'Branding',          task:'Logo variants for client',         status:'WIP',      pri:'High',   dl:'Apr 30', dep:'Client feedback pending',    expSP:5, actSP:'', cmt:'' },
+  { member:'Kriishna', brand:'WDV',        act:'Website',           task:'Landing page wireframes',          status:'Closed',   pri:'Medium', dl:'Apr 28', dep:'',                          expSP:3, actSP:3,  cmt:'' },
+  { member:'Harshil',  brand:'Wogom',      act:'Social Media',      task:'Instagram story templates',        status:'WIP',      pri:'Low',    dl:'Apr 30', dep:'',                          expSP:2, actSP:'', cmt:'' },
+  { member:'Rinal',    brand:'Internal',   act:'Ops',               task:'Team meeting notes compilation',   status:'Closed',   pri:'Low',    dl:'Apr 27', dep:'',                          expSP:1, actSP:1,  cmt:'' },
+  { member:'Prince',   brand:'Abaj',       act:'Content',           task:'Product copy review',              status:'Backlog',  pri:'Medium', dl:'Apr 30', dep:'',                          expSP:2, actSP:'', cmt:'' },
+];
+
+let filterMember = 'all';
+let filterStatus = null;
+let filterSearch = '';
+
+function sttClass(s){
+  if(s==='WIP')      return 'wip';
+  if(s==='Approved') return 'approved';
+  if(s==='Closed')   return 'closed';
+  return 'backlog';
+}
+
+function rowClass(s){
+  if(s==='WIP')      return 'row-wip';
+  if(s==='Approved') return 'row-approved';
+  if(s==='Closed')   return 'row-closed';
+  return 'row-backlog';
+}
+
+function render(){
+  const q = filterSearch.toLowerCase();
+  const rows = TASKS.filter(t=>{
+    if(filterMember !== 'all' && t.member !== filterMember) return false;
+    if(filterStatus && t.status !== filterStatus) return false;
+    if(q && !t.task.toLowerCase().includes(q) && !t.member.toLowerCase().includes(q) && !t.brand.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('task-tbody');
+  if(!rows.length){
+    tbody.innerHTML = `<tr><td colspan="11" class="empty">No tasks match your filters.</td></tr>`;
+  } else {
+    tbody.innerHTML = rows.map(t=>{
+      const m = MEMBERS[t.member]  || {color:'#64748b',i:t.member[0]};
+      const b = BRANDS[t.brand]    || {bg:'rgba(100,116,139,.15)',c:'#94a3b8'};
+      const sc = sttClass(t.status);
+      const rc = rowClass(t.status);
+      const pc = t.pri.toLowerCase();
+      const depHtml = t.dep
+        ? `<span class="dep-text" title="${t.dep}">${t.dep}</span>`
+        : `<span class="dep-none">—</span>`;
+      const cmtClass = t.cmt.includes('Adhoc') ? 'cmt-cell cmt-adhoc'
+                     : t.cmt.includes('backlog') ? 'cmt-cell cmt-bl'
+                     : 'cmt-cell';
+      return `<tr class="${rc}">
+        <td><div class="mem-cell"><div class="ava" style="background:${m.color}">${m.i}</div><span class="mem-name">${t.member}</span></div></td>
+        <td><span class="brand-tag" style="background:${b.bg};color:${b.c}">${t.brand}</span></td>
+        <td><span class="act-tag">${t.act}</span></td>
+        <td><div class="task-name" title="${t.task}">${t.task}</div></td>
+        <td><span class="stt ${sc}"><span class="stt-dot"></span>${t.status}</span></td>
+        <td><div class="pri ${pc}"><div class="pri-dot"></div>${t.pri}</div></td>
+        <td><span class="dl">${t.dl}</span></td>
+        <td>${depHtml}</td>
+        <td class="sp-cell">${t.expSP}</td>
+        <td class="sp-cell">${t.actSP !== '' ? `<strong>${t.actSP}</strong>` : '—'}</td>
+        <td><span class="${cmtClass}">${t.cmt || '—'}</span></td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Footer
+  const wip      = rows.filter(t=>t.status==='WIP').length;
+  const approved = rows.filter(t=>t.status==='Approved').length;
+  const closed   = rows.filter(t=>t.status==='Closed').length;
+  const backlog  = rows.filter(t=>t.status==='Backlog').length;
+  const expTotal = rows.reduce((s,t)=>s+(t.expSP||0),0);
+  const actTotal = rows.reduce((s,t)=>s+(parseInt(t.actSP)||0),0);
+
+  document.getElementById('tbl-foot').innerHTML = `
+    <div class="tbl-stat"><strong>${rows.length}</strong> tasks</div>
+    <div class="tbl-sep"></div>
+    <div class="tbl-stat"><strong style="color:#60a5fa">${wip}</strong> WIP</div>
+    <div class="tbl-sep"></div>
+    <div class="tbl-stat"><strong style="color:#fbbf24">${approved}</strong> Approved</div>
+    <div class="tbl-sep"></div>
+    <div class="tbl-stat"><strong style="color:#34d399">${closed}</strong> Closed</div>
+    <div class="tbl-sep"></div>
+    <div class="tbl-stat"><strong style="color:#a78bfa">${backlog}</strong> Backlog</div>
+    <div class="tbl-sep"></div>
+    <div class="tbl-stat"><strong>${actTotal}</strong> / ${expTotal} SP done</div>
+  `;
+
+  document.getElementById('row-count').textContent =
+    `Showing ${rows.length} of ${TASKS.length} tasks · Apr 16 – Apr 30`;
+}
+
+// Member chips
+document.querySelectorAll('[data-member]').forEach(c=>{
+  c.addEventListener('click',()=>{
+    document.querySelectorAll('[data-member]').forEach(x=>x.classList.remove('on'));
+    c.classList.add('on');
+    filterMember = c.dataset.member;
+    render();
+  });
+});
+
+// Status chips (toggle)
+document.querySelectorAll('[data-status]').forEach(c=>{
+  c.addEventListener('click',()=>{
+    const wasOn = c.classList.contains('on');
+    document.querySelectorAll('[data-status]').forEach(x=>x.classList.remove('on'));
+    if(!wasOn){ c.classList.add('on'); filterStatus = c.dataset.status; }
+    else filterStatus = null;
+    render();
+  });
+});
+
+// Search
+document.getElementById('search-input').addEventListener('input', e=>{
+  filterSearch = e.target.value.trim();
+  render();
+});
+
+render();
+</script>
+</body>
+</html>
