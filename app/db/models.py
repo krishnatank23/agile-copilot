@@ -47,6 +47,18 @@ class Workspace(Base):
     members = relationship("Member", back_populates="workspace", cascade="all, delete-orphan")
 
 
+class User(Base):
+    """Login account — either a manager or a team member."""
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    username = Column(String, unique=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    role = Column(String, nullable=False, default="member")  # "manager" | "member"
+    member_id = Column(Integer, ForeignKey("members.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class Member(Base):
     """A team member identified by display name."""
     __tablename__ = "members"

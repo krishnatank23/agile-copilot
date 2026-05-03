@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import NavBar from "@/components/NavBar";
+import { AuthProvider } from "@/context/AuthContext";
+import AuthGuard from "@/components/AuthGuard";
+import SidebarShell from "@/components/SidebarShell";
 
 export const metadata: Metadata = {
   title: "Agile Copilot",
@@ -10,9 +12,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>
-        <NavBar />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">{children}</main>
+      <body style={{ background: "#09090f", color: "#f1f5f9" }}>
+        <AuthProvider>
+          <AuthGuard>
+            <SidebarShell>{children}</SidebarShell>
+          </AuthGuard>
+        </AuthProvider>
       </body>
     </html>
   );

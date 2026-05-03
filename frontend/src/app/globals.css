@@ -4,6 +4,28 @@
 
 @layer base {
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+    background-color: #09090f;
+    color: #f1f5f9;
+    -webkit-font-smoothing: antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
   }
 }
+
+/* Radial purple glow in top-left */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 560px;
+  height: 560px;
+  background: radial-gradient(ellipse at 0% 0%, rgba(147, 51, 234, 0.13) 0%, transparent 65%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Hide scrollbar track but keep functionality */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
