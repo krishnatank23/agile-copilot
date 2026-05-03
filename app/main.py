@@ -53,6 +53,7 @@ from app.api.tasks import router as tasks_router
 from app.api.members import router as members_router
 from app.api.dashboard import router as dashboard_router
 from app.api.workspaces import router as workspaces_router
+from app.api.auth import router as auth_router
 
 # ──────────────────────────────────────────────
 # Logging
@@ -70,6 +71,18 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────────────────────────
 
 
+async def _seed_manager(db) -> None:
+    """Create the default manager account if it doesn't exist yet."""
+    from sqlalchemy import select
+    from app.db.models import User
+    from app.auth import hash_password
+    result = await db.execute(select(User).where(User.username == "manager"))
+    if result.scalar_one_or_none() is None:
+        db.add(User(username="manager", password_hash=hash_password(settings.MANAGER_PASSWORD), role="manager"))
+        await db.commit()
+        logger.info("Created default manager account (username: manager)")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Agile Copilot starting up")
@@ -79,6 +92,7 @@ async def lifespan(app: FastAPI):
 
     async with AsyncSessionLocal() as db:
         await crud.ensure_default_workspace(db)
+        await _seed_manager(db)
 
     # Delayed Teams subscription (Teams only — skip if not configured)
     if settings.AZURE_CLIENT_ID and settings.CHAT_ID:
@@ -135,6 +149,7 @@ app.add_middleware(
 )
 
 # Mount API routers
+app.include_router(auth_router)
 app.include_router(tasks_router)
 app.include_router(members_router)
 app.include_router(dashboard_router)

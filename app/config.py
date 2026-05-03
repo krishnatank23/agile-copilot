@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     SLACK_CLIENT_ID: str = Field(default="", description="Slack app client ID (for OAuth install flow)")
     SLACK_CLIENT_SECRET: str = Field(default="", description="Slack app client secret (for OAuth install flow)")
 
+    # --- Auth ---
+    JWT_SECRET: str = Field(default="change-me-in-production-please", description="Secret key for signing JWTs")
+    MANAGER_PASSWORD: str = Field(default="admin1234", description="Default manager account password")
+
     # --- Server ---
     HOST: str = Field(default="0.0.0.0", description="Server host")
     PORT: int = Field(default=8000, description="Server port")
