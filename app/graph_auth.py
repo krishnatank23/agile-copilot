@@ -1,8 +1,8 @@
 """
 Azure AD authentication — client credentials flow + delegated user flow.
 
-Client credentials: used for reading Excel, subscriptions, etc.
-Delegated (user) flow: used for sending Teams messages (avoids 403 on group chats).
+GraphAuth can be instantiated per-workspace (with explicit credentials)
+or as the global singleton (reads from settings).
 """
 
 import json
@@ -15,46 +15,56 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# File to persist the delegated refresh token across restarts
-_TOKEN_FILE = os.path.join(os.path.dirname(__file__), "..", "delegated_token.json")
+_DEFAULT_TOKEN_FILE = os.path.join(os.path.dirname(__file__), "..", "delegated_token.json")
 
 
 class GraphAuth:
     """
-    Manages Microsoft Graph API authentication.
+    Manages Microsoft Graph API authentication for one Azure AD app registration.
 
-    - Client credentials flow (app-only) for Excel, subscriptions, etc.
-    - Delegated flow (user login) for sending Teams chat messages.
+    Instantiate with explicit credentials for per-workspace use, or use the
+    module-level `graph_auth` singleton which reads from settings/.env.
     """
 
     TOKEN_URL_TEMPLATE = "https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
     AUTH_URL_TEMPLATE = "https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/authorize"
     SCOPE = "https://graph.microsoft.com/.default"
     DELEGATED_SCOPES = "Chat.ReadWrite ChatMessage.Send offline_access"
-    REFRESH_BUFFER_SECONDS = 300  # refresh 5 min before expiry
+    REFRESH_BUFFER_SECONDS = 300
 
-    def __init__(self):
-        # App-only token
+    def __init__(
+        self,
+        tenant_id: str | None = None,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        token_file: str | None = None,
+    ):
+        # Explicit credentials override settings; None falls back to settings
+        self._tenant_id = tenant_id
+        self._client_id = client_id
+        self._client_secret = client_secret
+        self._token_file = token_file or _DEFAULT_TOKEN_FILE
+
         self._token: str | None = None
         self._token_expires_at: float = 0.0
-        # Delegated (user) token
         self._user_token: str | None = None
         self._user_token_expires_at: float = 0.0
         self._refresh_token: str | None = None
-        # Load saved refresh token
         self._load_refresh_token()
+
+    # ── Credential resolution ──
 
     @property
     def tenant_id(self) -> str:
-        return settings.AZURE_TENANT_ID
+        return self._tenant_id or settings.AZURE_TENANT_ID
 
     @property
     def client_id(self) -> str:
-        return settings.AZURE_CLIENT_ID
+        return self._client_id or settings.AZURE_CLIENT_ID
 
     @property
     def client_secret(self) -> str:
-        return settings.AZURE_CLIENT_SECRET
+        return self._client_secret or settings.AZURE_CLIENT_SECRET
 
     @property
     def token_url(self) -> str:
@@ -69,7 +79,7 @@ class GraphAuth:
     async def get_token(self) -> str:
         if self._token and time.time() < (self._token_expires_at - self.REFRESH_BUFFER_SECONDS):
             return self._token
-        logger.info("Fetching new Graph API access token (app-only)")
+        logger.info("Fetching new Graph API access token (app-only, tenant=%s)", self.tenant_id[:8] + "…")
         await self._fetch_token()
         return self._token
 
@@ -81,9 +91,9 @@ class GraphAuth:
             "grant_type": "client_credentials",
         }
         async with httpx.AsyncClient() as client:
-            response = await client.post(self.token_url, data=data)
-            response.raise_for_status()
-            body = response.json()
+            resp = await client.post(self.token_url, data=data)
+            resp.raise_for_status()
+            body = resp.json()
         self._token = body["access_token"]
         expires_in = body.get("expires_in", 3600)
         self._token_expires_at = time.time() + expires_in
@@ -91,15 +101,11 @@ class GraphAuth:
 
     async def get_headers(self) -> dict:
         token = await self.get_token()
-        return {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        }
+        return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
     # ── Delegated (user) flow ──
 
     def get_login_url(self, redirect_uri: str) -> str:
-        """Build the URL the user visits to sign in."""
         params = (
             f"client_id={self.client_id}"
             f"&response_type=code"
@@ -111,7 +117,6 @@ class GraphAuth:
         return f"{self.auth_url}?{params}"
 
     async def exchange_code(self, code: str, redirect_uri: str) -> None:
-        """Exchange authorization code for user access + refresh tokens."""
         data = {
             "client_id": self.client_id,
             "client_secret": self.client_secret,
@@ -124,23 +129,18 @@ class GraphAuth:
             resp = await client.post(self.token_url, data=data)
             resp.raise_for_status()
             body = resp.json()
-
         self._user_token = body["access_token"]
         self._refresh_token = body.get("refresh_token")
         expires_in = body.get("expires_in", 3600)
         self._user_token_expires_at = time.time() + expires_in
         self._save_refresh_token()
-        logger.info("Delegated token acquired for user (expires in %ds)", expires_in)
+        logger.info("Delegated token acquired (expires in %ds)", expires_in)
 
     async def get_user_token(self) -> str | None:
-        """Return a valid delegated user token, refreshing if needed."""
         if self._user_token and time.time() < (self._user_token_expires_at - self.REFRESH_BUFFER_SECONDS):
             return self._user_token
-
         if not self._refresh_token:
             return None
-
-        # Refresh the token
         data = {
             "client_id": self.client_id,
             "client_secret": self.client_secret,
@@ -153,7 +153,6 @@ class GraphAuth:
                 resp = await client.post(self.token_url, data=data)
                 resp.raise_for_status()
                 body = resp.json()
-
             self._user_token = body["access_token"]
             self._refresh_token = body.get("refresh_token", self._refresh_token)
             expires_in = body.get("expires_in", 3600)
@@ -167,14 +166,10 @@ class GraphAuth:
             return None
 
     async def get_user_headers(self) -> dict | None:
-        """Return Authorization headers using delegated user token."""
         token = await self.get_user_token()
         if not token:
             return None
-        return {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        }
+        return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
     @property
     def has_user_token(self) -> bool:
@@ -182,23 +177,23 @@ class GraphAuth:
 
     def _save_refresh_token(self):
         try:
-            with open(_TOKEN_FILE, "w") as f:
+            with open(self._token_file, "w") as f:
                 json.dump({"refresh_token": self._refresh_token}, f)
         except Exception as e:
             logger.warning("Could not save refresh token: %s", e)
 
     def _load_refresh_token(self):
         try:
-            with open(_TOKEN_FILE, "r") as f:
+            with open(self._token_file, "r") as f:
                 data = json.load(f)
                 self._refresh_token = data.get("refresh_token")
                 if self._refresh_token:
-                    logger.info("Loaded saved delegated refresh token")
+                    logger.info("Loaded saved delegated refresh token from %s", self._token_file)
         except FileNotFoundError:
             pass
         except Exception as e:
             logger.warning("Could not load refresh token: %s", e)
 
 
-# Module-level singleton
+# Default singleton — used by the default workspace (reads from .env / settings)
 graph_auth = GraphAuth()
