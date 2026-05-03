@@ -73,7 +73,7 @@ def _postprocess(tasks: list[dict]) -> list[dict]:
 
 def _build_existing_tasks_summary(existing_rows: list[dict]) -> str:
     """
-    Build a brand-grouped tasks summary so the AI can learn patterns like:
+        Build a brand-grouped current-month tasks summary so the AI can learn patterns like:
       WOGOM (Social Media): Reel shoot [WIP], Micro Fiction [Closed]
       WOGOM (Content): Podcast draft [WIP]
     """
@@ -99,6 +99,22 @@ def _build_existing_tasks_summary(existing_rows: list[dict]) -> str:
         lines.append(f"  {brand} ({activity}): {task_list}")
 
     return "\n".join(lines) if lines else "  (no existing tasks)"
+
+
+def _build_recent_eod_summary(recent_eod_history: list[dict]) -> str:
+    """Format the last few raw EOD messages for prompt context."""
+    if not recent_eod_history:
+        return "  (no recent EOD history)"
+
+    lines = []
+    for item in recent_eod_history:
+        timestamp = item.get("message_timestamp") or item.get("created_at") or "unknown time"
+        text = (item.get("message_text") or "").strip()
+        if not text:
+            continue
+        lines.append(f"  - [{timestamp}] {text}")
+
+    return "\n".join(lines) if lines else "  (no recent EOD history)"
 
 
 async def _get_relevant_existing_tasks(eod_text: str, existing_rows: list[dict], k: int = 12) -> list[dict]:
@@ -134,11 +150,13 @@ def _build_prompt(eod_text: str, context: dict) -> str:
     brand_list = context.get("brand_list", KNOWN_BRANDS)
     activity_types = context.get("activity_types", ACTIVITY_TYPES)
     existing_rows = context.get("existing_rows", [])
+    recent_eod_history = context.get("recent_eod_history", [])
 
     backlog_str = "\n".join(f"  - {item}" for item in backlog_list) if backlog_list else "  (no backlog items)"
     brand_str = "\n".join(f"  - {brand}" for brand in brand_list) if brand_list else "  (no brands)"
     activity_str = "\n".join(f"  - {at}" for at in activity_types) if activity_types else "  (no activity types)"
     tasks_str = _build_existing_tasks_summary(existing_rows)
+    recent_eod_str = _build_recent_eod_summary(recent_eod_history)
 
     prompt = SYSTEM_PROMPT_TEMPLATE
     prompt = prompt.replace("{{MEMBER_NAME}}", member_name)
@@ -148,6 +166,7 @@ def _build_prompt(eod_text: str, context: dict) -> str:
     prompt = prompt.replace("{{BRAND_LIST}}", brand_str)
     prompt = prompt.replace("{{ACTIVITY_TYPE_LIST}}", activity_str)
     prompt = prompt.replace("{{EXISTING_TASKS}}", tasks_str)
+    prompt = prompt.replace("{{RECENT_EOD_HISTORY}}", recent_eod_str)
 
     return prompt + f"\n\n---\nEOD MESSAGE:\n{eod_text}"
 
