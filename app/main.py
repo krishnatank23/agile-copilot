@@ -281,12 +281,18 @@ async def _process_eod(
         "sprint_end_date": sprint_end,
         "backlog_list": sheet_ctx["backlog_list"],
         "existing_rows": sheet_ctx["existing_rows"],
+        "recent_eod_history": sheet_ctx.get("recent_eod_history", []),
     }
 
     logger.info(
         "Context: %d existing rows, %d backlog items",
         len(sheet_ctx["existing_rows"]), len(sheet_ctx["backlog_list"]),
     )
+
+    try:
+        await crud.add_eod_message(db, member.id, clean_message, timestamp)
+    except Exception as e:
+        logger.warning("Failed to store EOD history: %s", e)
 
     # Parse
     logger.info("Clean message:\n%s", clean_message)

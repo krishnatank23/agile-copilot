@@ -9,6 +9,7 @@ import pytest
 
 from app.teams_capture import strip_html, validate_eod, extract_metadata, is_eod_message
 from app.local_parser import parse_eod_local
+from app.ai_parser import _build_prompt
 
 
 # ──────────────────────────────────────────────
@@ -253,6 +254,37 @@ class TestLocalParser:
 
         for task in tasks:
             assert 1 <= task["expected_story_points"] <= 13
+
+
+class TestPromptBuilder:
+    def test_includes_recent_eod_history(self, default_context):
+        context = {
+            **default_context,
+            "existing_rows": [
+                {
+                    "brand": "WEMS",
+                    "activity_type": "Website",
+                    "sprint_backlog": "Landing page refresh",
+                    "stage": "WIP",
+                }
+            ],
+            "recent_eod_history": [
+                {
+                    "message_text": "Monday EOD\n- Landing page refresh in progress",
+                    "message_timestamp": "2025-01-13T18:30:00Z",
+                },
+                {
+                    "message_text": "Tuesday EOD\n- Landing page refresh reviewed",
+                    "message_timestamp": "2025-01-14T18:30:00Z",
+                },
+            ],
+        }
+
+        prompt = _build_prompt("Wednesday EOD\n- Landing page refresh done", context)
+
+        assert "Recent EOD history for this member:" in prompt
+        assert "Tuesday EOD" in prompt
+        assert "CURRENT MONTH TASK HISTORY" in prompt
 
     # ── Grouped EOD tests (headers are context, not emitted) ──
 

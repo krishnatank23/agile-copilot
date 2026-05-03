@@ -36,7 +36,7 @@ Each task object must have these exact fields:
 }
 
 SHEET-AWARE INTELLIGENCE:
-You are given the EXISTING TASKS from this member's sheet, grouped by brand and activity type.
+You are given the CURRENT MONTH TASK HISTORY from this member's sheet, grouped by brand and activity type.
 STUDY these patterns carefully before parsing:
 
 - The EXISTING TASKS show you exactly which brand and activity type each kind of task belongs to.
@@ -99,6 +99,9 @@ FIELD RULES:
    - Use the SPRINT END DATE provided in context. Do NOT infer dates from the EOD text.
 
 7. stage — CRITICAL: Infer whether the task is still in progress or completed.
+   Use the CURRENT EOD together with the RECENT EOD HISTORY and CURRENT MONTH TASK HISTORY.
+   If the same task has been WIP for the last few days and the current EOD says it is done,
+   the latest EOD wins and the stage should be Closed.
    Check for APPROVAL signals FIRST — they override completion words:
    - "review pending", "pending review", "review from [person]", "sent for review",
      "under review", "sent for approval", "awaiting approval", "approval pending",
@@ -146,3 +149,5 @@ CONTEXT (injected per request):
 {{ACTIVITY_TYPE_LIST}}
 - Existing tasks in this member's sheet (study these patterns!):
 {{EXISTING_TASKS}}
+- Recent EOD history for this member:
+{{RECENT_EOD_HISTORY}}
