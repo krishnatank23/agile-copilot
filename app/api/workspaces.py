@@ -108,10 +108,18 @@ async def update_workspace(
     role = current_user.get("role")
     if role == "member":
         raise HTTPException(status_code=403, detail="Access denied")
-    # Managers can only update their own workspace
-    if role == "manager" and current_user.get("workspace_id") != workspace_id:
-        raise HTTPException(status_code=403, detail="Access denied")
-    updated = await crud.update_workspace(db, workspace_id, body.model_dump(exclude_none=True))
+
+    if role == "manager":
+        # Managers can only update their own workspace
+        if current_user.get("workspace_id") != workspace_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        # Managers can only change chat routing — never credentials
+        MANAGER_ALLOWED = {"teams_agile_chat_id", "slack_channel_id"}
+        fields = {k: v for k, v in body.model_dump(exclude_none=True).items() if k in MANAGER_ALLOWED}
+    else:
+        fields = body.model_dump(exclude_none=True)
+
+    updated = await crud.update_workspace(db, workspace_id, fields)
     if not updated:
         raise HTTPException(status_code=404, detail="Workspace not found or nothing to update")
     return updated

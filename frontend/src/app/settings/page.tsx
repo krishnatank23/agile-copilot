@@ -42,8 +42,9 @@ function StatusBadge({ connected }: { connected: boolean }) {
   );
 }
 
-function WorkspaceCard({ ws, onUpdated, onDeleted }: {
-  ws: Workspace; onUpdated: (ws: Workspace) => void; onDeleted: (id: number) => void;
+function WorkspaceCard({ ws, isSuperAdmin, onUpdated, onDeleted }: {
+  ws: Workspace; isSuperAdmin: boolean;
+  onUpdated: (ws: Workspace) => void; onDeleted: (id: number) => void;
 }) {
   const [teamsAgileChat, setTeamsAgileChat] = useState(ws.teams_agile_chat_id);
   const [slackChannel, setSlackChannel] = useState(ws.slack_channel_id);
@@ -85,6 +86,7 @@ function WorkspaceCard({ ws, onUpdated, onDeleted }: {
       className="rounded-[12px] p-5 flex flex-col gap-4"
       style={{ background: "#11111b", border: "1px solid rgba(255,255,255,0.07)" }}
     >
+      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <p className="text-[14px] font-semibold text-slate-100">{ws.name}</p>
@@ -93,53 +95,85 @@ function WorkspaceCard({ ws, onUpdated, onDeleted }: {
         <div className="flex gap-2 items-center">
           {(ws.platform === "teams" || ws.platform === "both") && <StatusBadge connected={ws.teams_connected} />}
           {(ws.platform === "slack" || ws.platform === "both") && <StatusBadge connected={ws.slack_connected} />}
-          {ws.id !== 1 && (
+          {isSuperAdmin && ws.id !== 1 && (
             <button onClick={remove} className="text-[11px] text-red-500 hover:text-red-400 ml-1 transition-colors">Delete</button>
           )}
         </div>
       </div>
 
+      {/* Teams section */}
       {(ws.platform === "teams" || ws.platform === "both") && ws.teams_connected && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
-          <div>
-            <p className="text-[11px] text-slate-600 font-medium mb-[3px]">Tenant ID</p>
-            <p className="text-[11px] font-mono text-slate-400 truncate">{ws.azure_tenant_id || "—"}</p>
-          </div>
+
+          {/* Super admin sees credentials; manager only sees chat IDs */}
+          {isSuperAdmin ? (
+            <>
+              <div>
+                <p className="text-[11px] text-slate-600 font-medium mb-[3px]">Tenant ID</p>
+                <p className="text-[11px] font-mono text-slate-400 truncate">{ws.azure_tenant_id || "—"}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-slate-600 font-medium mb-[3px]">Client ID</p>
+                <p className="text-[11px] font-mono text-slate-400 truncate">{ws.azure_client_id || "—"}</p>
+              </div>
+            </>
+          ) : (
+            <div className="sm:col-span-2 flex items-center gap-2 px-3 py-2 rounded-[8px]"
+              style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.12)" }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth={2} className="w-[13px] h-[13px] flex-shrink-0">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+              <p className="text-[11px]" style={{ color: "#60a5fa" }}>
+                Azure credentials managed by your admin.
+              </p>
+            </div>
+          )}
+
           <div>
             <p className="text-[11px] text-slate-600 font-medium mb-[3px]">EOD Chat ID</p>
             <p className="text-[11px] font-mono text-slate-400 truncate">{ws.teams_chat_id || "—"}</p>
           </div>
+
           <div className="sm:col-span-2">
             <Field label="Summary Chat ID" id={`agile-chat-${ws.id}`} value={teamsAgileChat} onChange={setTeamsAgileChat}
               placeholder={ws.teams_chat_id} hint="Where morning/WIP summaries are sent. Defaults to EOD chat." />
           </div>
-          <div>
-            <p className="text-[11px] text-slate-600 font-medium mb-[3px]">Subscription</p>
-            <p className="text-[11px] font-mono text-slate-400 truncate">{ws.teams_subscription_id || "Not registered"}</p>
-          </div>
-          <div className="flex items-end">
-            <button
-              onClick={subscribe} disabled={subscribing}
-              className="text-[12px] px-4 py-[7px] rounded-[8px] font-medium transition-colors disabled:opacity-50"
-              style={{ background: "rgba(59,130,246,0.15)", color: "#60a5fa", border: "1px solid rgba(59,130,246,0.2)" }}
-            >
-              {subscribing ? "Registering…" : "Register Subscription"}
-            </button>
-          </div>
-          <div className="sm:col-span-2">
-            <a href={`/api/workspaces/${ws.id}/login`} className="text-[12px] text-fuchsia-400 hover:text-fuchsia-300 transition-colors">
-              Sign in with Microsoft (enable sending messages) →
-            </a>
-          </div>
+
+          {/* Subscription management — super admin only */}
+          {isSuperAdmin && (
+            <>
+              <div>
+                <p className="text-[11px] text-slate-600 font-medium mb-[3px]">Subscription</p>
+                <p className="text-[11px] font-mono text-slate-400 truncate">{ws.teams_subscription_id || "Not registered"}</p>
+              </div>
+              <div className="flex items-end">
+                <button
+                  onClick={subscribe} disabled={subscribing}
+                  className="text-[12px] px-4 py-[7px] rounded-[8px] font-medium transition-colors disabled:opacity-50"
+                  style={{ background: "rgba(59,130,246,0.15)", color: "#60a5fa", border: "1px solid rgba(59,130,246,0.2)" }}
+                >
+                  {subscribing ? "Registering…" : "Register Subscription"}
+                </button>
+              </div>
+              <div className="sm:col-span-2">
+                <a href={`/api/workspaces/${ws.id}/login`} className="text-[12px] text-fuchsia-400 hover:text-fuchsia-300 transition-colors">
+                  Sign in with Microsoft (enable sending messages) →
+                </a>
+              </div>
+            </>
+          )}
         </div>
       )}
 
+      {/* Slack section */}
       {(ws.platform === "slack" || ws.platform === "both") && ws.slack_connected && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
-          <div>
-            <p className="text-[11px] text-slate-600 font-medium mb-[3px]">Slack Team ID</p>
-            <p className="text-[11px] font-mono text-slate-400">{ws.slack_team_id || "—"}</p>
-          </div>
+          {isSuperAdmin && (
+            <div>
+              <p className="text-[11px] text-slate-600 font-medium mb-[3px]">Slack Team ID</p>
+              <p className="text-[11px] font-mono text-slate-400">{ws.slack_team_id || "—"}</p>
+            </div>
+          )}
           <Field label="Notification Channel ID" id={`slack-channel-${ws.id}`} value={slackChannel}
             onChange={setSlackChannel} placeholder="C0XXXXXXXXX"
             hint="Channel where morning summaries and WIP reports are posted." />
@@ -291,7 +325,7 @@ export default function SettingsPage() {
           <>
             {workspaces.map((ws) => (
               <WorkspaceCard
-                key={ws.id} ws={ws}
+                key={ws.id} ws={ws} isSuperAdmin={isSuperAdmin}
                 onUpdated={(updated) => setWorkspaces((ws) => ws.map((w) => (w.id === updated.id ? updated : w)))}
                 onDeleted={(id) => setWorkspaces((prev) => prev.filter((w) => w.id !== id))}
               />
