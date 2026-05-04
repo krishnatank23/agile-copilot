@@ -134,6 +134,18 @@ async def update_user(
             "member_id": user.member_id, "workspace_id": user.workspace_id}
 
 
+@router.delete("/users/{user_id}", dependencies=[Depends(require_super_admin)])
+async def delete_user(user_id: int, db: AsyncSession = Depends(get_db)):
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.role == "super_admin":
+        raise HTTPException(status_code=400, detail="Cannot delete super admin accounts")
+    await db.delete(user)
+    await db.commit()
+    return {"status": "deleted", "id": user_id}
+
+
 @router.get("/users")
 async def list_users(
     current_user: Annotated[dict, Depends(get_current_user)],

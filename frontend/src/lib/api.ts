@@ -86,6 +86,7 @@ export const api = {
     listUsers: () => request<{ id: number; username: string; role: string; member_id: number | null; workspace_id: number | null }[]>("/auth/users"),
     updateUser: (id: number, body: { workspace_id?: number; password?: string }) =>
       request<{ id: number; username: string; role: string; member_id: number | null; workspace_id: number | null }>(`/auth/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+    deleteUser: (id: number) => request(`/auth/users/${id}`, { method: "DELETE" }),
   },
   workspaces: {
     list: () => request<Workspace[]>("/workspaces"),

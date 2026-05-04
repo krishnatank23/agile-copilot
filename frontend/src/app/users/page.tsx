@@ -125,15 +125,19 @@ function EditUserModal({
   workspaces,
   onClose,
   onUpdated,
+  onDeleted,
 }: {
   user: UserRecord;
   workspaces: Workspace[];
   onClose: () => void;
   onUpdated: (u: UserRecord) => void;
+  onDeleted: (id: number) => void;
 }) {
   const [workspaceId, setWorkspaceId] = useState<number | "">(user.workspace_id ?? "");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [err, setErr] = useState("");
 
   async function submit(e: React.FormEvent) {
@@ -149,6 +153,18 @@ function EditUserModal({
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to update user");
     } finally { setBusy(false); }
+  }
+
+  async function handleDelete() {
+    if (!confirmDelete) { setConfirmDelete(true); return; }
+    setDeleting(true); setErr("");
+    try {
+      await api.auth.deleteUser(user.id);
+      onDeleted(user.id);
+      onClose();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Failed to delete user");
+    } finally { setDeleting(false); }
   }
 
   return (
@@ -192,7 +208,7 @@ function EditUserModal({
 
         <div className="flex gap-3 pt-1">
           <button
-            type="submit" disabled={busy}
+            type="submit" disabled={busy || deleting}
             className="flex-1 py-2 rounded-[8px] text-[12px] font-semibold disabled:opacity-50"
             style={{ background: "linear-gradient(135deg,#d946ef,#9333ea)", color: "#fff" }}
           >
@@ -200,6 +216,22 @@ function EditUserModal({
           </button>
           <button type="button" onClick={onClose} className="px-4 py-2 text-[12px] text-slate-600 hover:text-slate-400">
             Cancel
+          </button>
+        </div>
+
+        <div className="pt-1 border-t" style={{ borderColor: "rgba(255,255,255,0.07)" }}>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleting || busy}
+            className="w-full py-2 rounded-[8px] text-[12px] font-semibold disabled:opacity-50 transition-colors"
+            style={{
+              background: confirmDelete ? "rgba(239,68,68,0.15)" : "transparent",
+              color: confirmDelete ? "#f87171" : "#64748b",
+              border: `1px solid ${confirmDelete ? "rgba(239,68,68,0.3)" : "rgba(255,255,255,0.07)"}`,
+            }}
+          >
+            {deleting ? "Deleting…" : confirmDelete ? "Click again to confirm delete" : "Delete User"}
           </button>
         </div>
       </form>
@@ -272,6 +304,7 @@ export default function UsersPage() {
           workspaces={workspaces}
           onClose={() => setEditUser(null)}
           onUpdated={(u) => { setUsers((prev) => prev.map((x) => x.id === u.id ? u : x)); setEditUser(null); }}
+          onDeleted={(id) => { setUsers((prev) => prev.filter((x) => x.id !== id)); setEditUser(null); }}
         />
       )}
 
