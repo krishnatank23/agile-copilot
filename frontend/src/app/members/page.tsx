@@ -86,7 +86,7 @@ export default function MembersPage() {
   const [error, setError] = useState("");
   const [createFor, setCreateFor] = useState<Member | null>(null);
 
-  const isManager = user?.role === "manager";
+  const isManager = user?.role === "manager" || user?.role === "super_admin";
 
   useEffect(() => {
     const fetches: Promise<void>[] = [
@@ -122,10 +122,12 @@ export default function MembersPage() {
         style={{ background: "rgba(9,9,15,0.88)", backdropFilter: "blur(14px)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
         <div>
           <h1 className="text-[19px] font-bold text-slate-100 tracking-[-0.5px]">
-            {isManager ? "Team Members" : "My Profile"}
+            {user?.role === "super_admin" ? "All Members" : isManager ? "Team Members" : "My Profile"}
           </h1>
           <p className="text-[11.5px] text-slate-600 mt-[2px]">
-            {isManager ? `${members.length} member${members.length !== 1 ? "s" : ""} · auto-created on first EOD update` : "Your sprint summary"}
+            {isManager
+              ? `${members.length} member${members.length !== 1 ? "s" : ""} · auto-created on first EOD update`
+              : "Your sprint summary"}
           </p>
         </div>
       </div>

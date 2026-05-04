@@ -32,6 +32,11 @@ _MEMBER_COLS = [
     ("platform_user_id", "TEXT"),
 ]
 
+_USER_COLS = [
+    ("workspace_id", "INTEGER"),
+    ("member_id", "INTEGER"),
+]
+
 
 async def _add_missing_columns(conn, table: str, columns: list[tuple[str, str]]) -> None:
     result = await conn.execute(text(f"PRAGMA table_info({table})"))
@@ -47,6 +52,7 @@ async def init_db() -> None:
         await conn.run_sync(Base.metadata.create_all)
         await _add_missing_columns(conn, "workspaces", _WORKSPACE_COLS)
         await _add_missing_columns(conn, "members", _MEMBER_COLS)
+        await _add_missing_columns(conn, "users", _USER_COLS)
 
 
 async def get_db():

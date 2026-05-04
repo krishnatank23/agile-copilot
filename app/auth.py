@@ -33,9 +33,9 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 # ── Token helpers ─────────────────────────────────────────────────────────────
 
-def create_token(username: str, role: str, member_id: int | None) -> str:
+def create_token(username: str, role: str, member_id: int | None, workspace_id: int | None = None) -> str:
     expire = datetime.now(timezone.utc) + timedelta(hours=TOKEN_EXPIRE_HOURS)
-    payload = {"sub": username, "role": role, "member_id": member_id, "exp": expire}
+    payload = {"sub": username, "role": role, "member_id": member_id, "workspace_id": workspace_id, "exp": expire}
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=ALGORITHM)
 
 
@@ -57,6 +57,12 @@ async def get_current_user(
 
 
 async def require_manager(user: Annotated[dict, Depends(get_current_user)]) -> dict:
-    if user.get("role") != "manager":
+    if user.get("role") not in ("manager", "super_admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager access required")
+    return user
+
+
+async def require_super_admin(user: Annotated[dict, Depends(get_current_user)]) -> dict:
+    if user.get("role") != "super_admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super admin access required")
     return user

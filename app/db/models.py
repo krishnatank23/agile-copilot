@@ -48,14 +48,15 @@ class Workspace(Base):
 
 
 class User(Base):
-    """Login account — either a manager or a team member."""
+    """Login account — super_admin, team manager, or team member."""
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True)
     username = Column(String, unique=True, nullable=False)
     password_hash = Column(String, nullable=False)
-    role = Column(String, nullable=False, default="member")  # "manager" | "member"
-    member_id = Column(Integer, ForeignKey("members.id"), nullable=True)
+    role = Column(String, nullable=False, default="member")  # "super_admin" | "manager" | "member"
+    workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=True)  # set for managers
+    member_id = Column(Integer, ForeignKey("members.id"), nullable=True)         # set for members
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

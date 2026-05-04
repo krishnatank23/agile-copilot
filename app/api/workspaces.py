@@ -19,6 +19,7 @@ General:
 """
 
 import logging
+from typing import Annotated
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -27,6 +28,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings, GRAPH_BASE_URL
+from app.auth import get_current_user, require_super_admin
 from app.db.database import get_db
 from app.db import crud
 
@@ -69,15 +71,30 @@ class WorkspaceUpdate(BaseModel):
 
 
 @router.get("/api/workspaces")
-async def list_workspaces(db: AsyncSession = Depends(get_db)):
-    return await crud.list_workspaces(db)
+async def list_workspaces(
+    current_user: Annotated[dict, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+):
+    all_ws = await crud.list_workspaces(db)
+    # Managers see only their own workspace; super_admin sees all
+    if current_user.get("role") == "manager":
+        workspace_id = current_user.get("workspace_id")
+        return [w for w in all_ws if w["id"] == workspace_id]
+    return all_ws
 
 
 @router.get("/api/workspaces/{workspace_id}")
-async def get_workspace(workspace_id: int, db: AsyncSession = Depends(get_db)):
+async def get_workspace(
+    workspace_id: int,
+    current_user: Annotated[dict, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+):
     ws = await crud.get_workspace(db, workspace_id)
     if not ws:
         raise HTTPException(status_code=404, detail="Workspace not found")
+    # Managers can only view their own workspace
+    if current_user.get("role") == "manager" and current_user.get("workspace_id") != workspace_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     return crud._workspace_to_dict(ws)
 
 
@@ -85,15 +102,22 @@ async def get_workspace(workspace_id: int, db: AsyncSession = Depends(get_db)):
 async def update_workspace(
     workspace_id: int,
     body: WorkspaceUpdate,
+    current_user: Annotated[dict, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ):
+    role = current_user.get("role")
+    if role == "member":
+        raise HTTPException(status_code=403, detail="Access denied")
+    # Managers can only update their own workspace
+    if role == "manager" and current_user.get("workspace_id") != workspace_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     updated = await crud.update_workspace(db, workspace_id, body.model_dump(exclude_none=True))
     if not updated:
         raise HTTPException(status_code=404, detail="Workspace not found or nothing to update")
     return updated
 
 
-@router.delete("/api/workspaces/{workspace_id}")
+@router.delete("/api/workspaces/{workspace_id}", dependencies=[Depends(require_super_admin)])
 async def delete_workspace(workspace_id: int, db: AsyncSession = Depends(get_db)):
     ok = await crud.delete_workspace(db, workspace_id)
     if not ok:
@@ -106,7 +130,7 @@ async def delete_workspace(workspace_id: int, db: AsyncSession = Depends(get_db)
 # ──────────────────────────────────────────────
 
 
-@router.post("/api/workspaces/teams")
+@router.post("/api/workspaces/teams", dependencies=[Depends(require_super_admin)])
 async def connect_teams_workspace(
     body: TeamsWorkspaceCreate,
     db: AsyncSession = Depends(get_db),

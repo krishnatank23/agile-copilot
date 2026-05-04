@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, type Workspace } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 function Field({
   label, id, type = "text", value, onChange, placeholder, hint,
@@ -228,9 +229,12 @@ function AddTeamsForm({ onCreated }: { onCreated: (ws: Workspace) => void }) {
 }
 
 export default function SettingsPage() {
+  const { user } = useAuth();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const isSuperAdmin = user?.role === "super_admin";
 
   useEffect(() => {
     api.workspaces.list()
@@ -238,6 +242,14 @@ export default function SettingsPage() {
       .catch(() => setError("Could not load workspaces — is the backend running?"))
       .finally(() => setLoading(false));
   }, []);
+
+  if (user?.role === "member") {
+    return (
+      <div className="p-[26px] flex items-center justify-center min-h-[300px]">
+        <p className="text-[13px] text-slate-600">You don&apos;t have access to this page.</p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -251,9 +263,13 @@ export default function SettingsPage() {
         }}
       >
         <div>
-          <h1 className="text-[19px] font-bold text-slate-100 tracking-[-0.5px]">Connections</h1>
+          <h1 className="text-[19px] font-bold text-slate-100 tracking-[-0.5px]">
+            {isSuperAdmin ? "Workspaces" : "Connections"}
+          </h1>
           <p className="text-[11.5px] text-slate-600 mt-[2px]">
-            Connect Teams and Slack workspaces. Each has its own credentials and chat routing.
+            {isSuperAdmin
+              ? `${workspaces.length} workspace${workspaces.length !== 1 ? "s" : ""} · manage Teams and Slack connections`
+              : "Connect Teams and Slack workspaces. Each has its own credentials and chat routing."}
           </p>
         </div>
       </div>
@@ -281,9 +297,9 @@ export default function SettingsPage() {
               />
             ))}
 
-            <AddTeamsForm onCreated={(ws) => setWorkspaces((prev) => [...prev, ws])} />
+            {isSuperAdmin && <AddTeamsForm onCreated={(ws) => setWorkspaces((prev) => [...prev, ws])} />}
 
-            <a
+            {isSuperAdmin && <a
               href="/api/slack/install"
               className="flex items-center gap-2 px-4 py-3 rounded-[12px] text-[13px] text-slate-600 transition-colors"
               style={{ border: "2px dashed rgba(255,255,255,0.1)" }}
@@ -297,7 +313,7 @@ export default function SettingsPage() {
                 <path d="M0 34.249a5.381 5.381 0 0 0 5.376 5.386 5.381 5.381 0 0 0 5.376-5.386v-5.387H5.376A5.381 5.381 0 0 0 0 34.249m14.336 0v14.364A5.381 5.381 0 0 0 19.712 54a5.381 5.381 0 0 0 5.376-5.387V34.249a5.381 5.381 0 0 0-5.376-5.387 5.381 5.381 0 0 0-5.376 5.387"/>
               </svg>
               Add Slack Workspace via OAuth
-            </a>
+            </a>}
           </>
         )}
 

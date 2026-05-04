@@ -23,15 +23,16 @@ export interface Member {
 }
 
 export interface SprintProgress {
-  member: string; member_id: number; total_tasks: number;
-  wip: number; closed: number; sent_for_approval: number;
+  member: string; member_id: number; workspace_id: number; workspace_name: string;
+  total_tasks: number; wip: number; closed: number; sent_for_approval: number;
   expected_sp: number; actual_sp: number; pct: number;
 }
 
 export interface AuthUser {
   sub: string;
-  role: "manager" | "member";
+  role: "super_admin" | "manager" | "member";
   member_id: number | null;
+  workspace_id: number | null;
 }
 
 // ── Token storage ─────────────────────────────────────────────────────────────
@@ -75,14 +76,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   auth: {
     login: (username: string, password: string) =>
-      request<{ access_token: string; role: string; username: string; member_id: number | null }>("/auth/login", {
+      request<{ access_token: string; role: string; username: string; member_id: number | null; workspace_id: number | null }>("/auth/login", {
         method: "POST",
         body: JSON.stringify({ username, password }),
       }),
     me: () => request<AuthUser>("/auth/me"),
-    createUser: (body: { username: string; password: string; role: string; member_id?: number }) =>
+    createUser: (body: { username: string; password: string; role: string; member_id?: number; workspace_id?: number }) =>
       request("/auth/users", { method: "POST", body: JSON.stringify(body) }),
-    listUsers: () => request<{ id: number; username: string; role: string; member_id: number | null }[]>("/auth/users"),
+    listUsers: () => request<{ id: number; username: string; role: string; member_id: number | null; workspace_id: number | null }[]>("/auth/users"),
   },
   workspaces: {
     list: () => request<Workspace[]>("/workspaces"),
