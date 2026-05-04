@@ -103,6 +103,20 @@ class Task(Base):
     member = relationship("Member", back_populates="tasks")
 
 
+class EODMessage(Base):
+    """Raw EOD message captured for prompt history."""
+    __tablename__ = "eod_messages"
+
+    id = Column(Integer, primary_key=True)
+    member_id = Column(Integer, ForeignKey("members.id"), nullable=False)
+    message_text = Column(Text, nullable=False)
+    message_timestamp = Column(String, default="")
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    member = relationship("Member")
+
+
 class BacklogItem(Base):
     """A backlog item — can be promoted into a sprint task."""
     __tablename__ = "backlog_items"

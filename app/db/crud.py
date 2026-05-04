@@ -13,7 +13,7 @@ from sqlalchemy import select, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.models import Workspace, Member, Task, BacklogItem
+from app.db.models import Workspace, Member, Task, BacklogItem, EODMessage
 
 logger = logging.getLogger(__name__)
 
@@ -208,6 +208,11 @@ async def get_or_create_member(
     return new_member
 
 
+def _month_start(dt: datetime | None = None) -> datetime:
+    dt = dt or datetime.utcnow()
+    return dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
 async def list_members(
     db: AsyncSession,
     workspace_id: int = DEFAULT_WORKSPACE_ID,
@@ -270,14 +275,57 @@ def _task_to_dict(task: Task) -> dict:
     }
 
 
-async def get_tasks_for_member(db: AsyncSession, member_id: int) -> list[dict]:
+async def get_tasks_for_member(
+    db: AsyncSession,
+    member_id: int,
+    created_after: datetime | None = None,
+) -> list[dict]:
     """Return all tasks for a member as pipeline-compatible dicts."""
-    result = await db.execute(
-        select(Task)
-        .where(Task.member_id == member_id)
-        .order_by(Task.created_at)
-    )
+    query = select(Task).where(Task.member_id == member_id)
+    if created_after:
+        query = query.where(Task.created_at >= created_after)
+    result = await db.execute(query.order_by(Task.created_at))
     return [_task_to_dict(t) for t in result.scalars().all()]
+
+
+async def get_recent_eod_messages(
+    db: AsyncSession,
+    member_id: int,
+    limit: int = 3,
+) -> list[dict]:
+    """Return the most recent raw EOD messages for a member."""
+    result = await db.execute(
+        select(EODMessage)
+        .where(EODMessage.member_id == member_id)
+        .order_by(EODMessage.created_at.desc())
+        .limit(limit)
+    )
+    rows = result.scalars().all()
+    return [
+        {
+            "message_text": row.message_text or "",
+            "message_timestamp": row.message_timestamp or "",
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        }
+        for row in rows
+    ]
+
+
+async def add_eod_message(
+    db: AsyncSession,
+    member_id: int,
+    message_text: str,
+    message_timestamp: str = "",
+) -> None:
+    """Persist a raw EOD message for future prompt history."""
+    if not message_text.strip():
+        return
+    db.add(EODMessage(
+        member_id=member_id,
+        message_text=message_text,
+        message_timestamp=message_timestamp or "",
+    ))
+    await db.commit()
 
 
 async def get_tasks_for_member_by_name(
@@ -297,7 +345,8 @@ async def get_member_context(db: AsyncSession, member_id: int) -> dict:
     Return the member's context dict consumed by parse_eod + validate_all.
     Mirrors read_sheet_context()'s return shape.
     """
-    tasks = await get_tasks_for_member(db, member_id)
+    tasks = await get_tasks_for_member(db, member_id, created_after=_month_start())
+    recent_eod_history = await get_recent_eod_messages(db, member_id, limit=3)
 
     result = await db.execute(
         select(BacklogItem)
@@ -318,6 +367,7 @@ async def get_member_context(db: AsyncSession, member_id: int) -> dict:
         "backlog_items": backlog_items,
         "existing_rows": tasks,
         "backlog_list": backlog_list,
+        "recent_eod_history": recent_eod_history,
     }
 
 

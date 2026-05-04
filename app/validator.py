@@ -106,16 +106,10 @@ async def deduplicate(
                 row_idx, existing = idx, r
                 break
 
-        # Merge — never regress stage
-        STAGE_RANK = {"WIP": 0, "Sent for Approval": 1, "Closed": 2}
+        # Merge — latest EOD stage always wins (with historical context, LLM is more reliable)
         merged = {**existing}
-        existing_stage = existing.get("stage", DEFAULT_STAGE)
         new_stage = task.get("stage", DEFAULT_STAGE)
-        merged["stage"] = (
-            new_stage
-            if STAGE_RANK.get(new_stage, 0) >= STAGE_RANK.get(existing_stage, 0)
-            else existing_stage
-        )
+        merged["stage"] = new_stage  # Always trust the current EOD's stage decision
         merged["priority"] = task.get("priority", existing.get("priority", DEFAULT_PRIORITY))
         if task.get("comments"):
             old = existing.get("comments", "")
