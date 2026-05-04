@@ -91,8 +91,8 @@ export default function DashboardPage() {
     : [];
 
   const tableHeaders = isSuperAdmin
-    ? ["Member", "Team", "WIP", "In Review", "Closed", "Total", "Exp SP", "Act SP", "Progress"]
-    : ["Member", "WIP", "In Review", "Closed", "Total", "Exp SP", "Act SP", "Progress"];
+    ? ["Member", "Team", "WIP", "In Review", "Closed", "Total", "Exp SP", "Act SP", "Blocked by", "Progress"]
+    : ["Member", "WIP", "In Review", "Closed", "Total", "Exp SP", "Act SP", "Blocked by", "Progress"];
 
   return (
     <>
@@ -272,6 +272,24 @@ export default function DashboardPage() {
                         <td className="px-[13px] py-[11px] whitespace-nowrap text-slate-400">{p.total_tasks}</td>
                         <td className="px-[13px] py-[11px] whitespace-nowrap text-slate-400">{p.expected_sp}</td>
                         <td className="px-[13px] py-[11px] whitespace-nowrap font-semibold text-slate-100">{p.actual_sp}</td>
+                        <td className="px-[13px] py-[11px] max-w-[200px]">
+                          {p.dependencies && p.dependencies.length > 0 ? (
+                            <div className="flex flex-col gap-[3px]">
+                              {p.dependencies.map((dep, i) => (
+                                <span
+                                  key={i}
+                                  className="inline-block text-[10.5px] px-[7px] py-[2px] rounded-[5px] truncate max-w-[180px]"
+                                  style={{ background: "rgba(239,68,68,0.1)", color: "#f87171" }}
+                                  title={dep}
+                                >
+                                  {dep}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-slate-700">—</span>
+                          )}
+                        </td>
                         <td className="px-[13px] py-[11px] whitespace-nowrap min-w-[120px]">
                           <div className="flex items-center gap-2">
                             <div className="flex-1 h-[5px] rounded-full" style={{ background: "rgba(255,255,255,0.07)" }}>

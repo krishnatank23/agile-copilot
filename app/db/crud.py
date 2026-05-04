@@ -583,6 +583,12 @@ async def get_sprint_progress(
         closed = sum(1 for t in tasks if t.stage == "Closed")
         approval = sum(1 for t in tasks if t.stage == "Sent for Approval")
         ws_name = m.workspace.name if m.workspace else ""
+        wip_tasks = [t for t in tasks if t.stage == "WIP"]
+        dependencies = sorted({
+            t.dependency.strip()
+            for t in wip_tasks
+            if t.dependency and t.dependency.strip()
+        })
         progress.append({
             "member": m.display_name,
             "member_id": m.id,
@@ -595,6 +601,7 @@ async def get_sprint_progress(
             "expected_sp": expected,
             "actual_sp": actual,
             "pct": round((actual / expected) * 100) if expected > 0 else 0,
+            "dependencies": dependencies,
         })
     return progress
 

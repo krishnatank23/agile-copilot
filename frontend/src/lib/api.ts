@@ -25,7 +25,7 @@ export interface Member {
 export interface SprintProgress {
   member: string; member_id: number; workspace_id: number; workspace_name: string;
   total_tasks: number; wip: number; closed: number; sent_for_approval: number;
-  expected_sp: number; actual_sp: number; pct: number;
+  expected_sp: number; actual_sp: number; pct: number; dependencies: string[];
 }
 
 export interface AuthUser {
