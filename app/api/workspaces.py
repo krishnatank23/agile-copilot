@@ -44,12 +44,13 @@ router = APIRouter(tags=["workspaces"])
 
 class TeamsWorkspaceCreate(BaseModel):
     name: str = "Teams Workspace"
-    azure_tenant_id: str
-    azure_client_id: str
-    azure_client_secret: str
-    teams_chat_id: str            # chat to monitor (EOD messages)
-    teams_agile_chat_id: str = "" # chat for summaries (defaults to teams_chat_id)
-    teams_webhook_url: str        # public URL for Graph subscription
+    teams_chat_id: str             # required — EOD chat to monitor
+    teams_agile_chat_id: str = ""  # optional — summary chat, defaults to EOD chat
+    # Azure credentials are optional — inherited from the default workspace if omitted
+    azure_tenant_id: str = ""
+    azure_client_id: str = ""
+    azure_client_secret: str = ""
+    teams_webhook_url: str = ""    # optional — inherited from default workspace if omitted
 
 
 class WorkspaceUpdate(BaseModel):
@@ -110,13 +111,13 @@ async def update_workspace(
         raise HTTPException(status_code=403, detail="Access denied")
 
     if role == "manager":
-        # Managers can only update their own workspace
+        # Managers can only update their own workspace, and only chat routing fields
         if current_user.get("workspace_id") != workspace_id:
             raise HTTPException(status_code=403, detail="Access denied")
-        # Managers can only change chat routing — never credentials
         MANAGER_ALLOWED = {"teams_agile_chat_id", "slack_channel_id"}
         fields = {k: v for k, v in body.model_dump(exclude_none=True).items() if k in MANAGER_ALLOWED}
     else:
+        # super_admin can update anything
         fields = body.model_dump(exclude_none=True)
 
     updated = await crud.update_workspace(db, workspace_id, fields)
@@ -144,19 +145,22 @@ async def connect_teams_workspace(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Store Azure AD credentials for a Teams workspace.
-    After this, call POST /api/workspaces/{id}/subscribe to register the Graph subscription.
+    Create a new team workspace.
+    Azure credentials are inherited from the default workspace (id=1) if not provided.
+    Only the chat IDs are required per team.
     """
+    # Load base Azure config from the default workspace
+    base = await crud.get_workspace(db, 1)
     ws = await crud.create_workspace(
         db,
         name=body.name,
         platform="teams",
-        azure_tenant_id=body.azure_tenant_id,
-        azure_client_id=body.azure_client_id,
-        azure_client_secret=body.azure_client_secret,
+        azure_tenant_id=body.azure_tenant_id or (base.azure_tenant_id if base else ""),
+        azure_client_id=body.azure_client_id or (base.azure_client_id if base else ""),
+        azure_client_secret=body.azure_client_secret or (base.azure_client_secret if base else ""),
         teams_chat_id=body.teams_chat_id,
         teams_agile_chat_id=body.teams_agile_chat_id or body.teams_chat_id,
-        teams_webhook_url=body.teams_webhook_url,
+        teams_webhook_url=body.teams_webhook_url or (base.teams_webhook_url if base else ""),
     )
     return {"status": "created", "workspace": ws}
 

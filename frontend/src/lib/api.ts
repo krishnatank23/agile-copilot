@@ -91,9 +91,10 @@ export const api = {
     update: (id: number, fields: Partial<Workspace>) =>
       request<Workspace>(`/workspaces/${id}`, { method: "PATCH", body: JSON.stringify(fields) }),
     connectTeams: (body: {
-      name: string; azure_tenant_id: string; azure_client_id: string;
-      azure_client_secret: string; teams_chat_id: string;
-      teams_agile_chat_id?: string; teams_webhook_url: string;
+      name: string; teams_chat_id: string;
+      teams_agile_chat_id?: string;
+      azure_tenant_id?: string; azure_client_id?: string;
+      azure_client_secret?: string; teams_webhook_url?: string;
     }) => request("/workspaces/teams", { method: "POST", body: JSON.stringify(body) }),
     subscribe: (id: number) => request(`/workspaces/${id}/subscribe`, { method: "POST" }),
     delete: (id: number) => request(`/workspaces/${id}`, { method: "DELETE" }),
