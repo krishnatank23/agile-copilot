@@ -84,6 +84,8 @@ export const api = {
     createUser: (body: { username: string; password: string; role: string; member_id?: number; workspace_id?: number }) =>
       request("/auth/users", { method: "POST", body: JSON.stringify(body) }),
     listUsers: () => request<{ id: number; username: string; role: string; member_id: number | null; workspace_id: number | null }[]>("/auth/users"),
+    updateUser: (id: number, body: { workspace_id?: number; password?: string }) =>
+      request<{ id: number; username: string; role: string; member_id: number | null; workspace_id: number | null }>(`/auth/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   },
   workspaces: {
     list: () => request<Workspace[]>("/workspaces"),

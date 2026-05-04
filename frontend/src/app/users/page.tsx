@@ -118,6 +118,95 @@ function CreateManagerModal({
   );
 }
 
+// ── Edit User Modal ───────────────────────────────────────────────────────────
+
+function EditUserModal({
+  user,
+  workspaces,
+  onClose,
+  onUpdated,
+}: {
+  user: UserRecord;
+  workspaces: Workspace[];
+  onClose: () => void;
+  onUpdated: (u: UserRecord) => void;
+}) {
+  const [workspaceId, setWorkspaceId] = useState<number | "">(user.workspace_id ?? "");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true); setErr("");
+    try {
+      const body: { workspace_id?: number; password?: string } = {};
+      if (workspaceId !== "") body.workspace_id = Number(workspaceId);
+      if (password) body.password = password;
+      const updated = await api.auth.updateUser(user.id, body);
+      onUpdated(updated);
+      onClose();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Failed to update user");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)" }}>
+      <form
+        onSubmit={submit}
+        className="rounded-[14px] p-6 flex flex-col gap-4 w-full max-w-sm"
+        style={{ background: "#11111b", border: "1px solid rgba(217,70,239,0.2)" }}
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-[14px] font-semibold text-slate-100">Edit — {user.username}</p>
+          <button type="button" onClick={onClose} className="text-slate-600 hover:text-slate-400 text-[20px] leading-none">×</button>
+        </div>
+
+        <div className="flex flex-col gap-[6px]">
+          <label className="text-[12px] font-medium text-slate-400">Workspace / Team</label>
+          <select
+            value={workspaceId}
+            onChange={(e) => setWorkspaceId(Number(e.target.value))}
+            className="px-3 py-2 rounded-[8px] text-[13px] text-slate-100 outline-none"
+            style={{ background: "#09090f", border: "1px solid rgba(255,255,255,0.07)" }}
+          >
+            {workspaces.map((ws) => (
+              <option key={ws.id} value={ws.id}>{ws.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-[6px]">
+          <label className="text-[12px] font-medium text-slate-400">New Password <span className="text-slate-600">(leave blank to keep current)</span></label>
+          <input
+            type="password" value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Min 6 characters"
+            className="px-3 py-2 rounded-[8px] text-[13px] text-slate-100 outline-none placeholder:text-slate-600"
+            style={{ background: "#09090f", border: "1px solid rgba(255,255,255,0.07)" }}
+          />
+        </div>
+
+        {err && <p className="text-[11px]" style={{ color: "#f87171" }}>{err}</p>}
+
+        <div className="flex gap-3 pt-1">
+          <button
+            type="submit" disabled={busy}
+            className="flex-1 py-2 rounded-[8px] text-[12px] font-semibold disabled:opacity-50"
+            style={{ background: "linear-gradient(135deg,#d946ef,#9333ea)", color: "#fff" }}
+          >
+            {busy ? "Saving…" : "Save Changes"}
+          </button>
+          <button type="button" onClick={onClose} className="px-4 py-2 text-[12px] text-slate-600 hover:text-slate-400">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 // ── Role badge ────────────────────────────────────────────────────────────────
 
 function RoleBadge({ role }: { role: string }) {
@@ -143,6 +232,7 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const [editUser, setEditUser] = useState<UserRecord | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -174,6 +264,14 @@ export default function UsersPage() {
           workspaces={workspaces}
           onClose={() => setShowCreate(false)}
           onCreated={(u) => setUsers((prev) => [...prev, u])}
+        />
+      )}
+      {editUser && (
+        <EditUserModal
+          user={editUser}
+          workspaces={workspaces}
+          onClose={() => setEditUser(null)}
+          onUpdated={(u) => { setUsers((prev) => prev.map((x) => x.id === u.id ? u : x)); setEditUser(null); }}
         />
       )}
 
@@ -232,6 +330,7 @@ export default function UsersPage() {
                   key={u.id}
                   user={u}
                   workspaceName={u.workspace_id ? (wsMap[u.workspace_id] ?? `Workspace #${u.workspace_id}`) : "—"}
+                  onEdit={() => setEditUser(u)}
                 />
               ))}
             </Section>
@@ -245,6 +344,7 @@ export default function UsersPage() {
                   key={u.id}
                   user={u}
                   workspaceName={u.workspace_id ? (wsMap[u.workspace_id] ?? `Workspace #${u.workspace_id}`) : "—"}
+                  onEdit={() => setEditUser(u)}
                 />
               ))}
             </Section>
@@ -298,7 +398,7 @@ function Section({
   );
 }
 
-function UserRow({ user, workspaceName }: { user: UserRecord; workspaceName: string }) {
+function UserRow({ user, workspaceName, onEdit }: { user: UserRecord; workspaceName: string; onEdit?: () => void }) {
   const initials = user.username.slice(0, 2).toUpperCase();
   const avatarColor =
     user.role === "super_admin" ? "linear-gradient(135deg,#f59e0b,#d97706)" :
@@ -307,7 +407,7 @@ function UserRow({ user, workspaceName }: { user: UserRecord; workspaceName: str
 
   return (
     <div
-      className="flex items-center gap-4 px-[18px] py-[13px] transition-colors"
+      className="flex items-center gap-4 px-[18px] py-[13px] transition-colors group"
       style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
       onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.02)")}
       onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}
@@ -326,6 +426,15 @@ function UserRow({ user, workspaceName }: { user: UserRecord; workspaceName: str
         </p>
       </div>
       <RoleBadge role={user.role} />
+      {onEdit && (
+        <button
+          onClick={onEdit}
+          className="opacity-0 group-hover:opacity-100 transition-opacity text-[11px] px-[10px] py-[4px] rounded-[6px] text-slate-400 hover:text-slate-100"
+          style={{ border: "1px solid rgba(255,255,255,0.1)" }}
+        >
+          Edit
+        </button>
+      )}
     </div>
   );
 }

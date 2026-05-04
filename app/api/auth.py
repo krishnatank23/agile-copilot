@@ -105,6 +105,35 @@ async def create_user(
     }
 
 
+class UpdateUserRequest(BaseModel):
+    workspace_id: int | None = None
+    password: str | None = None
+
+
+@router.patch("/users/{user_id}", dependencies=[Depends(require_super_admin)])
+async def update_user(
+    user_id: int,
+    body: UpdateUserRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a user's workspace assignment or password. Super admin only."""
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.role == "super_admin":
+        raise HTTPException(status_code=400, detail="Cannot modify super admin accounts")
+
+    if body.workspace_id is not None:
+        user.workspace_id = body.workspace_id
+    if body.password:
+        user.password_hash = hash_password(body.password)
+
+    await db.commit()
+    await db.refresh(user)
+    return {"id": user.id, "username": user.username, "role": user.role,
+            "member_id": user.member_id, "workspace_id": user.workspace_id}
+
+
 @router.get("/users")
 async def list_users(
     current_user: Annotated[dict, Depends(get_current_user)],
