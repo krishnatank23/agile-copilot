@@ -1,0 +1,337 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { api, type Workspace } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+
+interface UserRecord {
+  id: number;
+  username: string;
+  role: string;
+  member_id: number | null;
+  workspace_id: number | null;
+}
+
+// ── Create Manager Modal ──────────────────────────────────────────────────────
+
+function CreateManagerModal({
+  workspaces,
+  onClose,
+  onCreated,
+}: {
+  workspaces: Workspace[];
+  onClose: () => void;
+  onCreated: (user: UserRecord) => void;
+}) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [workspaceId, setWorkspaceId] = useState<number | "">(
+    workspaces[0]?.id ?? ""
+  );
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!workspaceId) { setErr("Please select a workspace."); return; }
+    setBusy(true); setErr("");
+    try {
+      const created = await api.auth.createUser({
+        username,
+        password,
+        role: "manager",
+        workspace_id: Number(workspaceId),
+      }) as UserRecord;
+      onCreated(created);
+      onClose();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Failed to create manager");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)" }}>
+      <form
+        onSubmit={submit}
+        className="rounded-[14px] p-6 flex flex-col gap-4 w-full max-w-sm"
+        style={{ background: "#11111b", border: "1px solid rgba(217,70,239,0.2)" }}
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-[14px] font-semibold text-slate-100">Create Team Manager</p>
+          <button type="button" onClick={onClose} className="text-slate-600 hover:text-slate-400 text-[20px] leading-none">×</button>
+        </div>
+
+        <div className="flex flex-col gap-[6px]">
+          <label className="text-[12px] font-medium text-slate-400">Workspace / Team</label>
+          <select
+            value={workspaceId}
+            onChange={(e) => setWorkspaceId(Number(e.target.value))}
+            required
+            className="px-3 py-2 rounded-[8px] text-[13px] text-slate-100 outline-none"
+            style={{ background: "#09090f", border: "1px solid rgba(255,255,255,0.07)" }}
+          >
+            {workspaces.map((ws) => (
+              <option key={ws.id} value={ws.id}>{ws.name}</option>
+            ))}
+          </select>
+          <p className="text-[11px] text-slate-600">This manager will only see their team&apos;s data.</p>
+        </div>
+
+        <div className="flex flex-col gap-[6px]">
+          <label className="text-[12px] font-medium text-slate-400">Username</label>
+          <input
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required placeholder="e.g. design_manager"
+            className="px-3 py-2 rounded-[8px] text-[13px] text-slate-100 outline-none placeholder:text-slate-600"
+            style={{ background: "#09090f", border: "1px solid rgba(255,255,255,0.07)" }}
+          />
+        </div>
+
+        <div className="flex flex-col gap-[6px]">
+          <label className="text-[12px] font-medium text-slate-400">Password</label>
+          <input
+            type="password" value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required placeholder="Min 6 characters"
+            className="px-3 py-2 rounded-[8px] text-[13px] text-slate-100 outline-none placeholder:text-slate-600"
+            style={{ background: "#09090f", border: "1px solid rgba(255,255,255,0.07)" }}
+          />
+        </div>
+
+        {err && <p className="text-[11px]" style={{ color: "#f87171" }}>{err}</p>}
+
+        <div className="flex gap-3 pt-1">
+          <button
+            type="submit" disabled={busy}
+            className="flex-1 py-2 rounded-[8px] text-[12px] font-semibold disabled:opacity-50"
+            style={{ background: "linear-gradient(135deg,#d946ef,#9333ea)", color: "#fff" }}
+          >
+            {busy ? "Creating…" : "Create Manager"}
+          </button>
+          <button type="button" onClick={onClose} className="px-4 py-2 text-[12px] text-slate-600 hover:text-slate-400">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// ── Role badge ────────────────────────────────────────────────────────────────
+
+function RoleBadge({ role }: { role: string }) {
+  const styles: Record<string, { bg: string; color: string; label: string }> = {
+    super_admin: { bg: "rgba(245,158,11,0.1)",   color: "#f59e0b", label: "Super Admin" },
+    manager:     { bg: "rgba(217,70,239,0.1)",   color: "#e879f9", label: "Manager" },
+    member:      { bg: "rgba(59,130,246,0.1)",   color: "#60a5fa", label: "Member" },
+  };
+  const s = styles[role] ?? { bg: "rgba(255,255,255,0.06)", color: "#475569", label: role };
+  return (
+    <span className="text-[10px] px-[8px] py-[3px] rounded-full font-semibold" style={{ background: s.bg, color: s.color }}>
+      {s.label}
+    </span>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+
+export default function UsersPage() {
+  const { user } = useAuth();
+  const [users, setUsers] = useState<UserRecord[]>([]);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      api.auth.listUsers() as Promise<UserRecord[]>,
+      api.workspaces.list(),
+    ])
+      .then(([u, w]) => { setUsers(u); setWorkspaces(w); })
+      .catch(() => setError("Could not load data — is the backend running?"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (user?.role !== "super_admin") {
+    return (
+      <div className="p-[26px] flex items-center justify-center min-h-[300px]">
+        <p className="text-[13px] text-slate-600">Super admin access required.</p>
+      </div>
+    );
+  }
+
+  const wsMap = Object.fromEntries(workspaces.map((w) => [w.id, w.name]));
+  const managers = users.filter((u) => u.role === "manager");
+  const superAdmins = users.filter((u) => u.role === "super_admin");
+  const members = users.filter((u) => u.role === "member");
+
+  return (
+    <>
+      {showCreate && (
+        <CreateManagerModal
+          workspaces={workspaces}
+          onClose={() => setShowCreate(false)}
+          onCreated={(u) => setUsers((prev) => [...prev, u])}
+        />
+      )}
+
+      {/* Topbar */}
+      <div
+        className="sticky top-0 z-10 flex items-center justify-between px-[26px] py-[13px]"
+        style={{ background: "rgba(9,9,15,0.88)", backdropFilter: "blur(14px)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}
+      >
+        <div>
+          <h1 className="text-[19px] font-bold text-slate-100 tracking-[-0.5px]">Users & Access</h1>
+          <p className="text-[11.5px] text-slate-600 mt-[2px]">
+            {users.length} account{users.length !== 1 ? "s" : ""} · {managers.length} manager{managers.length !== 1 ? "s" : ""} across {workspaces.length} workspace{workspaces.length !== 1 ? "s" : ""}
+          </p>
+        </div>
+        <button
+          onClick={() => setShowCreate(true)}
+          className="flex items-center gap-[6px] px-[13px] py-[7px] rounded-[8px] text-[12px] font-semibold transition-colors"
+          style={{ background: "linear-gradient(135deg,#d946ef,#9333ea)", color: "#fff", boxShadow: "0 0 12px rgba(217,70,239,0.3)" }}
+        >
+          <span className="text-[15px] leading-none">+</span>
+          New Manager
+        </button>
+      </div>
+
+      <div className="p-[26px] flex flex-col gap-[22px] max-w-4xl">
+
+        {error && (
+          <div className="rounded-[10px] px-4 py-3 text-sm" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", color: "#f87171" }}>
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex flex-col gap-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-[56px] rounded-[10px] animate-pulse" style={{ background: "#11111b", border: "1px solid rgba(255,255,255,0.07)" }} />
+            ))}
+          </div>
+        ) : (
+          <>
+            {/* Super admins */}
+            <Section title="Super Admins" count={superAdmins.length} color="#f59e0b">
+              {superAdmins.map((u) => (
+                <UserRow key={u.id} user={u} workspaceName="All workspaces" />
+              ))}
+            </Section>
+
+            {/* Managers */}
+            <Section title="Team Managers" count={managers.length} color="#e879f9"
+              action={<button onClick={() => setShowCreate(true)} className="text-[11px] text-fuchsia-400 hover:text-fuchsia-300 transition-colors">+ Add manager</button>}
+            >
+              {managers.length === 0 ? (
+                <EmptyRow message="No managers yet. Click '+ Add manager' to create one." />
+              ) : managers.map((u) => (
+                <UserRow
+                  key={u.id}
+                  user={u}
+                  workspaceName={u.workspace_id ? (wsMap[u.workspace_id] ?? `Workspace #${u.workspace_id}`) : "—"}
+                />
+              ))}
+            </Section>
+
+            {/* Members */}
+            <Section title="Team Members" count={members.length} color="#60a5fa">
+              {members.length === 0 ? (
+                <EmptyRow message="No member accounts yet. Managers create these from the Members page." />
+              ) : members.map((u) => (
+                <UserRow
+                  key={u.id}
+                  user={u}
+                  workspaceName={u.workspace_id ? (wsMap[u.workspace_id] ?? `Workspace #${u.workspace_id}`) : "—"}
+                />
+              ))}
+            </Section>
+          </>
+        )}
+
+        {/* Help box */}
+        <div
+          className="rounded-[12px] p-5 text-[12.5px] text-slate-600 flex flex-col gap-2"
+          style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)" }}
+        >
+          <p className="font-semibold text-slate-400">How access works</p>
+          <ul className="list-disc list-inside space-y-1">
+            <li><span className="text-slate-300">Super Admin:</span> Sees and manages everything across all teams.</li>
+            <li><span className="text-slate-300">Manager:</span> Scoped to one workspace — sees their team&apos;s tasks and members only.</li>
+            <li><span className="text-slate-300">Member:</span> Sees only their own tasks. Created by managers from the Members page.</li>
+            <li>Members are auto-created when someone posts an EOD update in Teams or Slack.</li>
+          </ul>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function Section({
+  title, count, color, action, children,
+}: {
+  title: string; count: number; color: string; action?: React.ReactNode; children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-[12px] overflow-hidden" style={{ background: "#11111b", border: "1px solid rgba(255,255,255,0.07)" }}>
+      <div
+        className="flex items-center justify-between px-[18px] py-[13px]"
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
+      >
+        <div className="flex items-center gap-[9px]">
+          <span className="text-[13px] font-semibold text-slate-100">{title}</span>
+          <span
+            className="text-[10px] px-[7px] py-[2px] rounded-full font-semibold"
+            style={{ background: "rgba(255,255,255,0.06)", color }}
+          >
+            {count}
+          </span>
+        </div>
+        {action}
+      </div>
+      <div>{children}</div>
+    </div>
+  );
+}
+
+function UserRow({ user, workspaceName }: { user: UserRecord; workspaceName: string }) {
+  const initials = user.username.slice(0, 2).toUpperCase();
+  const avatarColor =
+    user.role === "super_admin" ? "linear-gradient(135deg,#f59e0b,#d97706)" :
+    user.role === "manager"     ? "linear-gradient(135deg,#d946ef,#9333ea)" :
+    "linear-gradient(135deg,#3b82f6,#6366f1)";
+
+  return (
+    <div
+      className="flex items-center gap-4 px-[18px] py-[13px] transition-colors"
+      style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
+      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.02)")}
+      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}
+    >
+      <div
+        className="flex-shrink-0 flex items-center justify-center rounded-full text-[10px] font-bold text-white"
+        style={{ width: 32, height: 32, background: avatarColor }}
+      >
+        {initials}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[13px] font-medium text-slate-100 truncate">{user.username}</p>
+        <p className="text-[11px] text-slate-600 mt-[1px] truncate">
+          {user.role === "member" && user.member_id ? `Member ID #${user.member_id} · ` : ""}
+          {workspaceName}
+        </p>
+      </div>
+      <RoleBadge role={user.role} />
+    </div>
+  );
+}
+
+function EmptyRow({ message }: { message: string }) {
+  return (
+    <div className="px-[18px] py-[16px] text-[12px] text-slate-600">{message}</div>
+  );
+}
