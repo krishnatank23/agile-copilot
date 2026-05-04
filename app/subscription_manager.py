@@ -49,7 +49,7 @@ class SubscriptionManager:
 
         payload = {
             "changeType": "created",
-            "notificationUrl": settings.WEBHOOK_NOTIFICATION_URL,
+            "notificationUrl": f"{settings.WEBHOOK_NOTIFICATION_URL.rstrip('/')}/api/graph-webhook",
             "resource": f"/chats/{settings.AGILE_CHAT_ID}/messages",
             "expirationDateTime": expiration.isoformat(),
             "clientState": "agile-copilot-secret",

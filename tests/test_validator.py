@@ -3,6 +3,7 @@ Tests for the validation layer — dedup, backlog matching, defaults, schema enf
 """
 
 import pytest
+import pytest_asyncio
 
 from app.validator import (
     deduplicate,
@@ -106,20 +107,52 @@ def backlog_list():
 
 
 class TestDeduplicate:
-    def test_detects_duplicate(self, sample_tasks, existing_rows):
-        new_tasks, updates = deduplicate(sample_tasks, existing_rows)
+    @pytest.mark.asyncio
+    async def test_detects_duplicate(self, sample_tasks, existing_rows):
+        new_tasks, updates = await deduplicate(sample_tasks, existing_rows)
         # "Dashboard wireframe redesign" should match existing "Dashboard wireframe redesign"
         assert len(updates) == 1
         assert len(new_tasks) == 2
 
-    def test_no_duplicates(self, sample_tasks):
-        new_tasks, updates = deduplicate(sample_tasks, [])
+    @pytest.mark.asyncio
+    async def test_no_duplicates(self, sample_tasks):
+        new_tasks, updates = await deduplicate(sample_tasks, [])
         assert len(new_tasks) == 3
         assert len(updates) == 0
 
-    def test_update_preserves_row_index(self, sample_tasks, existing_rows):
-        _, updates = deduplicate(sample_tasks, existing_rows)
+    @pytest.mark.asyncio
+    async def test_update_preserves_row_index(self, sample_tasks, existing_rows):
+        _, updates = await deduplicate(sample_tasks, existing_rows)
         assert updates[0].get("_row_index") == 0
+
+    @pytest.mark.asyncio
+    async def test_stage_always_takes_latest_eod(self):
+        # A task that was Closed in the sheet — new EOD says WIP → should become WIP
+        new_tasks = [{"sprint_backlog": "Landing page refresh", "stage": "WIP",
+                      "priority": "Medium", "comments": "", "brand": "", "activity_type": "",
+                      "backlog": "", "dependency": "", "deadline": "2025-01-15",
+                      "expected_story_points": 3, "actual_story_points": 0}]
+        existing = [{"sprint_backlog": "Landing page refresh", "stage": "Closed",
+                     "priority": "Medium", "comments": "", "brand": "", "activity_type": "",
+                     "backlog": "", "dependency": "", "deadline": "2025-01-15",
+                     "expected_story_points": 3, "actual_story_points": 0}]
+        _, updates = await deduplicate(new_tasks, existing)
+        assert len(updates) == 1
+        assert updates[0]["stage"] == "WIP"  # latest EOD wins, even if it regresses
+
+    @pytest.mark.asyncio
+    async def test_stage_closed_wins_over_wip(self):
+        # Reverse: existing WIP, new EOD says Closed → should become Closed
+        new_tasks = [{"sprint_backlog": "API integration", "stage": "Closed",
+                      "priority": "High", "comments": "", "brand": "", "activity_type": "",
+                      "backlog": "", "dependency": "", "deadline": "2025-01-15",
+                      "expected_story_points": 5, "actual_story_points": 0}]
+        existing = [{"sprint_backlog": "API integration", "stage": "WIP",
+                     "priority": "High", "comments": "", "brand": "", "activity_type": "",
+                     "backlog": "", "dependency": "", "deadline": "2025-01-15",
+                     "expected_story_points": 5, "actual_story_points": 0}]
+        _, updates = await deduplicate(new_tasks, existing)
+        assert updates[0]["stage"] == "Closed"
 
 
 # ──────────────────────────────────────────────
@@ -128,21 +161,24 @@ class TestDeduplicate:
 
 
 class TestMatchBacklog:
-    def test_matches_backlog_item(self, sample_tasks, backlog_list):
-        result = match_backlog(sample_tasks, backlog_list)
+    @pytest.mark.asyncio
+    async def test_matches_backlog_item(self, sample_tasks, backlog_list):
+        result = await match_backlog(sample_tasks, backlog_list)
         # "Dashboard wireframe redesign" should match "Dashboard wireframe"
         dashboard_task = next(t for t in result if "Dashboard" in t["sprint_backlog"])
         # Backlog column stays empty — item already exists in its own row
         assert dashboard_task["backlog"] == ""
         assert "From backlog" in dashboard_task["comments"]
 
-    def test_no_match(self, backlog_list):
+    @pytest.mark.asyncio
+    async def test_no_match(self, backlog_list):
         tasks = [{"sprint_backlog": "Totally unrelated task", "backlog": "", "comments": ""}]
-        result = match_backlog(tasks, backlog_list)
+        result = await match_backlog(tasks, backlog_list)
         assert result[0]["backlog"] == ""
 
-    def test_empty_backlog(self, sample_tasks):
-        result = match_backlog(sample_tasks, [])
+    @pytest.mark.asyncio
+    async def test_empty_backlog(self, sample_tasks):
+        result = await match_backlog(sample_tasks, [])
         for task in result:
             assert task["backlog"] == ""
 
@@ -296,8 +332,9 @@ class TestBrandPreservation:
 
 
 class TestValidateAll:
-    def test_full_pipeline(self, sample_tasks, existing_rows, backlog_list):
-        new_tasks, update_tasks = validate_all(
+    @pytest.mark.asyncio
+    async def test_full_pipeline(self, sample_tasks, existing_rows, backlog_list):
+        new_tasks, update_tasks = await validate_all(
             sample_tasks, existing_rows, backlog_list, "2025-01-15"
         )
 
@@ -311,7 +348,8 @@ class TestValidateAll:
             assert "sprint_backlog" in task
             assert "stage" in task
 
-    def test_empty_input(self):
-        new_tasks, update_tasks = validate_all([], [], [], "2025-01-15")
+    @pytest.mark.asyncio
+    async def test_empty_input(self):
+        new_tasks, update_tasks = await validate_all([], [], [], "2025-01-15")
         assert len(new_tasks) == 0
         assert len(update_tasks) == 0

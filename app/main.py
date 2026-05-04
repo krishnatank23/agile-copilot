@@ -36,7 +36,7 @@ from fastapi.responses import RedirectResponse, HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings, get_sprint_end_date
+from app.config import settings, get_sprint_end_date, GRAPH_BASE_URL
 from app.teams_capture import extract_metadata, is_eod_message, validate_eod
 from app.ai_parser import parse_eod
 from app.validator import validate_all
@@ -251,7 +251,8 @@ async def _process_backlog_command(sender: str, message: str, db: AsyncSession) 
 
 
 async def _process_eod(
-    sender: str, clean_message: str, timestamp: str, db: AsyncSession
+    sender: str, clean_message: str, timestamp: str, db: AsyncSession,
+    workspace_id: int = 1,
 ) -> PipelineResult:
     """
     Full EOD pipeline (DB-backed):
