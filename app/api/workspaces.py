@@ -19,6 +19,7 @@ General:
 """
 
 import logging
+from typing import Annotated
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -27,6 +28,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings, GRAPH_BASE_URL
+from app.auth import get_current_user, require_super_admin
 from app.db.database import get_db
 from app.db import crud
 
@@ -42,12 +44,13 @@ router = APIRouter(tags=["workspaces"])
 
 class TeamsWorkspaceCreate(BaseModel):
     name: str = "Teams Workspace"
-    azure_tenant_id: str
-    azure_client_id: str
-    azure_client_secret: str
-    teams_chat_id: str            # chat to monitor (EOD messages)
-    teams_agile_chat_id: str = "" # chat for summaries (defaults to teams_chat_id)
-    teams_webhook_url: str        # public URL for Graph subscription
+    teams_chat_id: str             # required — EOD chat to monitor
+    teams_agile_chat_id: str = ""  # optional — summary chat, defaults to EOD chat
+    # Azure credentials are optional — inherited from the default workspace if omitted
+    azure_tenant_id: str = ""
+    azure_client_id: str = ""
+    azure_client_secret: str = ""
+    teams_webhook_url: str = ""    # optional — inherited from default workspace if omitted
 
 
 class WorkspaceUpdate(BaseModel):
@@ -69,15 +72,30 @@ class WorkspaceUpdate(BaseModel):
 
 
 @router.get("/api/workspaces")
-async def list_workspaces(db: AsyncSession = Depends(get_db)):
-    return await crud.list_workspaces(db)
+async def list_workspaces(
+    current_user: Annotated[dict, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+):
+    all_ws = await crud.list_workspaces(db)
+    # Managers see only their own workspace; super_admin sees all
+    if current_user.get("role") == "manager":
+        workspace_id = current_user.get("workspace_id")
+        return [w for w in all_ws if w["id"] == workspace_id]
+    return all_ws
 
 
 @router.get("/api/workspaces/{workspace_id}")
-async def get_workspace(workspace_id: int, db: AsyncSession = Depends(get_db)):
+async def get_workspace(
+    workspace_id: int,
+    current_user: Annotated[dict, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+):
     ws = await crud.get_workspace(db, workspace_id)
     if not ws:
         raise HTTPException(status_code=404, detail="Workspace not found")
+    # Managers can only view their own workspace
+    if current_user.get("role") == "manager" and current_user.get("workspace_id") != workspace_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     return crud._workspace_to_dict(ws)
 
 
@@ -85,15 +103,30 @@ async def get_workspace(workspace_id: int, db: AsyncSession = Depends(get_db)):
 async def update_workspace(
     workspace_id: int,
     body: WorkspaceUpdate,
+    current_user: Annotated[dict, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ):
-    updated = await crud.update_workspace(db, workspace_id, body.model_dump(exclude_none=True))
+    role = current_user.get("role")
+    if role == "member":
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if role == "manager":
+        # Managers can only update their own workspace, and only chat routing fields
+        if current_user.get("workspace_id") != workspace_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        MANAGER_ALLOWED = {"teams_agile_chat_id", "slack_channel_id"}
+        fields = {k: v for k, v in body.model_dump(exclude_none=True).items() if k in MANAGER_ALLOWED}
+    else:
+        # super_admin can update anything
+        fields = body.model_dump(exclude_none=True)
+
+    updated = await crud.update_workspace(db, workspace_id, fields)
     if not updated:
         raise HTTPException(status_code=404, detail="Workspace not found or nothing to update")
     return updated
 
 
-@router.delete("/api/workspaces/{workspace_id}")
+@router.delete("/api/workspaces/{workspace_id}", dependencies=[Depends(require_super_admin)])
 async def delete_workspace(workspace_id: int, db: AsyncSession = Depends(get_db)):
     ok = await crud.delete_workspace(db, workspace_id)
     if not ok:
@@ -106,25 +139,28 @@ async def delete_workspace(workspace_id: int, db: AsyncSession = Depends(get_db)
 # ──────────────────────────────────────────────
 
 
-@router.post("/api/workspaces/teams")
+@router.post("/api/workspaces/teams", dependencies=[Depends(require_super_admin)])
 async def connect_teams_workspace(
     body: TeamsWorkspaceCreate,
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Store Azure AD credentials for a Teams workspace.
-    After this, call POST /api/workspaces/{id}/subscribe to register the Graph subscription.
+    Create a new team workspace.
+    Azure credentials are inherited from the default workspace (id=1) if not provided.
+    Only the chat IDs are required per team.
     """
+    # Load base Azure config from the default workspace
+    base = await crud.get_workspace(db, 1)
     ws = await crud.create_workspace(
         db,
         name=body.name,
         platform="teams",
-        azure_tenant_id=body.azure_tenant_id,
-        azure_client_id=body.azure_client_id,
-        azure_client_secret=body.azure_client_secret,
+        azure_tenant_id=body.azure_tenant_id or (base.azure_tenant_id if base else ""),
+        azure_client_id=body.azure_client_id or (base.azure_client_id if base else ""),
+        azure_client_secret=body.azure_client_secret or (base.azure_client_secret if base else ""),
         teams_chat_id=body.teams_chat_id,
         teams_agile_chat_id=body.teams_agile_chat_id or body.teams_chat_id,
-        teams_webhook_url=body.teams_webhook_url,
+        teams_webhook_url=body.teams_webhook_url or (base.teams_webhook_url if base else ""),
     )
     return {"status": "created", "workspace": ws}
 
@@ -242,7 +278,6 @@ SLACK_TOKEN_URL = "https://slack.com/api/oauth.v2.access"
 #   users:read          — resolve user display names
 SLACK_SCOPES = "chat:write,channels:history,users:read,groups:history,im:history"
 
-
 @router.get("/api/slack/install")
 async def slack_install(request: Request, workspace_name: str = "Slack Workspace"):
     """
@@ -263,7 +298,6 @@ async def slack_install(request: Request, workspace_name: str = "Slack Workspace
         f"&state={state}"
     )
     return RedirectResponse(url)
-
 
 @router.get("/api/slack/callback")
 async def slack_callback(

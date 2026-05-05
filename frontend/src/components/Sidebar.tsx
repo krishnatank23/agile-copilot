@@ -4,6 +4,24 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 
+const NAV_SUPER_ADMIN = [
+  {
+    label: "Overview",
+    items: [
+      { href: "/", label: "All Teams", icon: <DashIcon /> },
+      { href: "/tasks", label: "All Tasks", icon: <TasksIcon /> },
+      { href: "/members", label: "All Members", icon: <MembersIcon /> },
+    ],
+  },
+  {
+    label: "Admin",
+    items: [
+      { href: "/users", label: "Users & Access", icon: <ShieldIcon /> },
+      { href: "/settings", label: "Workspaces", icon: <SettingsIcon /> },
+    ],
+  },
+];
+
 const NAV_MANAGER = [
   {
     label: "Menu",
@@ -30,6 +48,14 @@ const NAV_MEMBER = [
     ],
   },
 ];
+
+function ShieldIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-[15px] h-[15px] flex-shrink-0">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </svg>
+  );
+}
 
 function DashIcon() {
   return (
@@ -74,9 +100,31 @@ export default function Sidebar() {
 
   if (!user || path === "/login") return null;
 
-  const sections = user.role === "manager" ? NAV_MANAGER : NAV_MEMBER;
+  const sections =
+    user.role === "super_admin" ? NAV_SUPER_ADMIN :
+    user.role === "manager" ? NAV_MANAGER :
+    NAV_MEMBER;
+
   const displayName = user.sub;
-  const roleLabel = user.role === "manager" ? "Manager" : "Team Member";
+  const roleLabel =
+    user.role === "super_admin" ? "Super Admin" :
+    user.role === "manager" ? "Manager" :
+    "Team Member";
+
+  const roleBadgeStyle =
+    user.role === "super_admin"
+      ? { background: "rgba(245,158,11,0.12)", color: "#f59e0b" }
+      : user.role === "manager"
+      ? { background: "rgba(217,70,239,0.12)", color: "#e879f9" }
+      : { background: "rgba(59,130,246,0.12)", color: "#60a5fa" };
+
+  const avatarGradient =
+    user.role === "super_admin"
+      ? "linear-gradient(135deg,#f59e0b,#d97706)"
+      : user.role === "manager"
+      ? "linear-gradient(135deg,#d946ef,#9333ea)"
+      : "linear-gradient(135deg,#3b82f6,#6366f1)";
+
   const avatarLetter = displayName.charAt(0).toUpperCase();
 
   return (
@@ -100,14 +148,7 @@ export default function Sidebar() {
 
       {/* Role badge */}
       <div className="px-[18px] py-[10px]" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-        <span
-          className="text-[10px] font-semibold px-[8px] py-[3px] rounded-full"
-          style={
-            user.role === "manager"
-              ? { background: "rgba(217,70,239,0.12)", color: "#e879f9" }
-              : { background: "rgba(59,130,246,0.12)", color: "#60a5fa" }
-          }
-        >
+        <span className="text-[10px] font-semibold px-[8px] py-[3px] rounded-full" style={roleBadgeStyle}>
           {roleLabel}
         </span>
       </div>
@@ -148,7 +189,7 @@ export default function Sidebar() {
         <div className="flex items-center gap-[9px] px-[10px] py-2 rounded-[7px]">
           <div
             className="flex-shrink-0 flex items-center justify-center rounded-full text-[11px] font-bold text-white"
-            style={{ width: 30, height: 30, background: user.role === "manager" ? "linear-gradient(135deg,#d946ef,#9333ea)" : "linear-gradient(135deg,#3b82f6,#6366f1)" }}
+            style={{ width: 30, height: 30, background: avatarGradient }}
           >
             {avatarLetter}
           </div>

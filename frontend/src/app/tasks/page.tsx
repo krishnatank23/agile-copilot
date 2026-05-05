@@ -1,20 +1,22 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api, type Task, type Member } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 const STAGES: Task["stage"][] = ["WIP", "Sent for Approval", "Closed"];
+const PRIORITIES: Task["priority"][] = ["High", "Medium", "Low"];
 
 const STAGE_STYLE: Record<string, { bg: string; color: string; label: string }> = {
-  WIP:               { bg: "rgba(59,130,246,.12)",  color: "#60a5fa",  label: "WIP" },
-  "Sent for Approval": { bg: "rgba(245,158,11,.12)", color: "#fbbf24",  label: "In Review" },
-  Closed:            { bg: "rgba(16,185,129,.12)",  color: "#34d399",  label: "Closed" },
+  WIP:                 { bg: "rgba(59,130,246,.12)",  color: "#60a5fa",  label: "WIP" },
+  "Sent for Approval": { bg: "rgba(245,158,11,.12)",  color: "#fbbf24",  label: "In Review" },
+  Closed:              { bg: "rgba(16,185,129,.12)",  color: "#34d399",  label: "Closed" },
 };
 
-const PRI_STYLE: Record<string, { color: string; dot: string }> = {
-  High:   { color: "#f87171", dot: "#f87171" },
-  Medium: { color: "#fbbf24", dot: "#fbbf24" },
-  Low:    { color: "#475569", dot: "#475569" },
+const PRI_STYLE: Record<string, { color: string }> = {
+  High:   { color: "#f87171" },
+  Medium: { color: "#fbbf24" },
+  Low:    { color: "#475569" },
 };
 
 const MEMBER_COLORS: Record<string, string> = {
@@ -28,21 +30,155 @@ function initials(name: string) { return name.split(" ").map((w) => w[0]).join("
 
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button
-      onClick={onClick}
+    <button onClick={onClick}
       className="px-[10px] py-[3px] rounded-[20px] text-[11.5px] font-medium whitespace-nowrap transition-all cursor-pointer flex-shrink-0"
-      style={
-        active
-          ? { background: "rgba(217,70,239,0.12)", borderColor: "rgba(217,70,239,0.25)", color: "#e879f9", border: "1px solid" }
-          : { background: "transparent", border: "1px solid rgba(255,255,255,0.07)", color: "#475569" }
-      }
-    >
+      style={active
+        ? { background: "rgba(217,70,239,0.12)", border: "1px solid rgba(217,70,239,0.25)", color: "#e879f9" }
+        : { background: "transparent", border: "1px solid rgba(255,255,255,0.07)", color: "#475569" }}>
       {children}
     </button>
   );
 }
 
+// ── Inline cell components ────────────────────────────────────────────────────
+
+interface CellProps {
+  task: Task;
+  field: keyof Task;
+  editing: boolean;
+  onStartEdit: () => void;
+  onCommit: (value: string | number) => void;
+  onCancel: () => void;
+}
+
+function TextCell({ task, field, editing, onStartEdit, onCommit, onCancel }: CellProps) {
+  const val = String((task[field] as string | number) ?? "");
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { if (editing) ref.current?.select(); }, [editing]);
+
+  if (editing) {
+    return (
+      <input ref={ref} defaultValue={val} autoFocus
+        className="w-full bg-transparent text-slate-100 text-[12.5px] outline-none rounded px-1"
+        style={{ border: "1px solid rgba(217,70,239,0.5)", minWidth: 120 }}
+        onBlur={(e) => onCommit(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { e.preventDefault(); onCommit((e.target as HTMLInputElement).value); }
+          if (e.key === "Escape") onCancel();
+        }}
+      />
+    );
+  }
+
+  return (
+    <div onClick={onStartEdit} title="Click to edit"
+      className="cursor-text rounded px-1 py-[1px] transition-colors max-w-[200px] truncate"
+      style={{ color: val ? "#94a3b8" : "#475569" }}
+      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)")}
+      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}>
+      {val || <span style={{ color: "#334155" }}>—</span>}
+    </div>
+  );
+}
+
+function TaskNameCell({ task, editing, onStartEdit, onCommit, onCancel }: CellProps) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (editing) ref.current?.select(); }, [editing]);
+
+  if (editing) {
+    return (
+      <input ref={ref} defaultValue={task.sprint_backlog} autoFocus
+        className="bg-transparent text-slate-100 text-[12.5px] font-medium outline-none rounded px-1"
+        style={{ border: "1px solid rgba(217,70,239,0.5)", width: 210 }}
+        onBlur={(e) => onCommit(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { e.preventDefault(); onCommit((e.target as HTMLInputElement).value); }
+          if (e.key === "Escape") onCancel();
+        }}
+      />
+    );
+  }
+
+  return (
+    <div onClick={onStartEdit} title="Click to edit" className="cursor-text">
+      <div className="font-medium text-slate-100 text-[12.5px] max-w-[210px] truncate rounded px-1 py-[1px]"
+        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)")}
+        onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}>
+        {task.sprint_backlog}
+      </div>
+      {task.comments && <div className="text-[11px] text-slate-600 mt-[2px] truncate px-1">{task.comments}</div>}
+    </div>
+  );
+}
+
+function SelectCell({ task, field, options, renderOption, editing, onStartEdit, onCommit, onCancel }: CellProps & {
+  options: string[];
+  renderOption?: (v: string) => React.ReactNode;
+}) {
+  const val = String(task[field] ?? "");
+  const ref = useRef<HTMLSelectElement>(null);
+  useEffect(() => { if (editing) ref.current?.focus(); }, [editing]);
+
+  if (editing) {
+    return (
+      <select ref={ref} defaultValue={val} autoFocus
+        className="bg-[#11111b] text-slate-100 text-[11.5px] rounded outline-none px-2 py-[3px]"
+        style={{ border: "1px solid rgba(217,70,239,0.5)" }}
+        onBlur={(e) => onCommit(e.target.value)}
+        onChange={(e) => onCommit(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Escape") onCancel(); }}
+      >
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    );
+  }
+
+  return (
+    <div onClick={onStartEdit} className="cursor-pointer rounded px-1 py-[1px]"
+      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)")}
+      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}>
+      {renderOption ? renderOption(val) : <span className="text-slate-400 text-[12.5px]">{val}</span>}
+    </div>
+  );
+}
+
+function NumberCell({ task, field, editing, onStartEdit, onCommit, onCancel }: CellProps) {
+  const val = Number(task[field] ?? 0);
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (editing) { ref.current?.select(); } }, [editing]);
+
+  if (editing) {
+    return (
+      <input ref={ref} type="number" defaultValue={val} min={0} max={20} autoFocus
+        className="w-12 bg-transparent text-slate-100 text-[12.5px] font-semibold outline-none rounded px-1 text-center"
+        style={{ border: "1px solid rgba(217,70,239,0.5)" }}
+        onBlur={(e) => onCommit(parseInt(e.target.value) || 0)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { e.preventDefault(); onCommit(parseInt((e.target as HTMLInputElement).value) || 0); }
+          if (e.key === "Escape") onCancel();
+        }}
+      />
+    );
+  }
+
+  return (
+    <div onClick={onStartEdit} className="cursor-text rounded px-1 py-[1px] text-center"
+      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)")}
+      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}>
+      <span className="text-[12.5px] font-semibold text-slate-100">{val}</span>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+type EditingCell = { id: number; field: keyof Task } | null;
+
 export default function TasksPage() {
+  const { user } = useAuth();
+  const isManager = user?.role === "manager" || user?.role === "super_admin";
+
   const [tasks, setTasks] = useState<Task[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [memberFilter, setMemberFilter] = useState("All");
@@ -50,7 +186,8 @@ export default function TasksPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [editing, setEditing] = useState<number | null>(null);
+  const [saving, setSaving] = useState<number | null>(null);
+  const [editingCell, setEditingCell] = useState<EditingCell>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,28 +210,35 @@ export default function TasksPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function updateStage(task: Task, newStage: Task["stage"]) {
-    setEditing(task.id);
+  async function commitCell(task: Task, field: keyof Task, rawValue: string | number) {
+    setEditingCell(null);
+    let value: string | number = rawValue;
+    if (field === "actual_story_points" || field === "expected_story_points") {
+      value = parseInt(String(rawValue)) || 0;
+    }
+    const current = task[field];
+    if (String(value) === String(current ?? "")) return; // no change
+    setSaving(task.id);
     try {
-      const updated = await api.tasks.update(task.id, { stage: newStage });
+      const updated = await api.tasks.update(task.id, { [field]: value } as Partial<Task>);
       setTasks((prev) => prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)));
     } catch {
-      alert("Failed to update task stage.");
+      alert("Failed to save change.");
     } finally {
-      setEditing(null);
+      setSaving(null);
     }
   }
 
-  async function updateActualSP(task: Task, value: number) {
-    setEditing(task.id);
-    try {
-      const updated = await api.tasks.update(task.id, { actual_story_points: value });
-      setTasks((prev) => prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)));
-    } catch {
-      alert("Failed to update story points.");
-    } finally {
-      setEditing(null);
-    }
+  function startEdit(taskId: number, field: keyof Task) {
+    setEditingCell({ id: taskId, field });
+  }
+
+  function cancelEdit() {
+    setEditingCell(null);
+  }
+
+  function isEditing(taskId: number, field: keyof Task) {
+    return editingCell?.id === taskId && editingCell?.field === field;
   }
 
   const q = search.toLowerCase();
@@ -103,80 +247,78 @@ export default function TasksPage() {
     return (
       t.sprint_backlog?.toLowerCase().includes(q) ||
       t.member_name?.toLowerCase().includes(q) ||
-      t.brand?.toLowerCase().includes(q)
+      t.brand?.toLowerCase().includes(q) ||
+      t.comments?.toLowerCase().includes(q)
     );
   });
 
-  const stageRowClass: Record<string, string> = {
-    WIP: "border-l-[3px] border-l-blue-500",
-    "Sent for Approval": "border-l-[3px] border-l-amber-400",
-    Closed: "border-l-[3px] border-l-emerald-500",
+  const stageLeftBorder: Record<string, string> = {
+    WIP: "#3b82f6",
+    "Sent for Approval": "#f59e0b",
+    Closed: "#10b981",
   };
 
   return (
     <>
       {/* Topbar */}
-      <div
-        className="sticky top-0 z-10 flex items-center justify-between px-[26px] py-[13px]"
-        style={{
-          background: "rgba(9,9,15,0.88)",
-          backdropFilter: "blur(14px)",
-          borderBottom: "1px solid rgba(255,255,255,0.07)",
-        }}
-      >
+      <div className="sticky top-0 z-10 flex items-center justify-between px-[26px] py-[13px]"
+        style={{ background: "rgba(9,9,15,0.88)", backdropFilter: "blur(14px)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
         <div>
-          <h1 className="text-[19px] font-bold text-slate-100 tracking-[-0.5px]">Tasks</h1>
-          <p className="text-[11.5px] text-slate-600 mt-[2px]">{visible.length} task{visible.length !== 1 ? "s" : ""} shown</p>
+          <h1 className="text-[19px] font-bold text-slate-100 tracking-[-0.5px]">
+            {user?.role === "super_admin" ? "All Tasks" : isManager ? "Tasks" : "My Tasks"}
+          </h1>
+          <p className="text-[11.5px] text-slate-600 mt-[2px]">
+            {visible.length} task{visible.length !== 1 ? "s" : ""} · click any cell to edit
+          </p>
         </div>
       </div>
 
       <div className="p-[26px]">
         {error && (
-          <div className="rounded-[10px] px-4 py-3 text-sm mb-5" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", color: "#f87171" }}>
+          <div className="rounded-[10px] px-4 py-3 text-sm mb-5"
+            style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", color: "#f87171" }}>
             {error}
           </div>
         )}
 
-        {/* Table card */}
-        <div className="rounded-[12px] overflow-hidden" style={{ background: "#11111b", border: "1px solid rgba(255,255,255,0.07)" }}>
+        <div className="rounded-[12px] overflow-hidden"
+          style={{ background: "#11111b", border: "1px solid rgba(255,255,255,0.07)" }}>
 
           {/* Header */}
-          <div className="flex items-center justify-between px-[18px] py-[15px]" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+          <div className="flex items-center justify-between px-[18px] py-[15px]"
+            style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
             <div>
               <h2 className="text-[14px] font-semibold text-slate-100">Sprint Tasks</h2>
-              <p className="text-[11.5px] text-slate-600 mt-[2px]">Showing {visible.length} of {tasks.length} tasks</p>
+              <p className="text-[11.5px] text-slate-600 mt-[2px]">Showing {visible.length} of {tasks.length}</p>
             </div>
-            <div
-              className="flex items-center gap-[6px] px-[10px] py-[6px] rounded-[6px]"
-              style={{ border: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-[13px] h-[13px] text-slate-600 flex-shrink-0">
+            <div className="flex items-center gap-[6px] px-[10px] py-[6px] rounded-[6px]"
+              style={{ border: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+                className="w-[13px] h-[13px] text-slate-600 flex-shrink-0">
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
-              <input
-                type="text"
-                placeholder="Search tasks, members, brands…"
-                value={search}
+              <input type="text" placeholder="Search…" value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="bg-transparent border-none outline-none text-[12px] text-slate-100 placeholder:text-slate-600 w-44"
-              />
+                className="bg-transparent border-none outline-none text-[12px] text-slate-100 placeholder:text-slate-600 w-36" />
             </div>
           </div>
 
-          {/* Filter chips */}
-          <div
-            className="flex items-center gap-[5px] px-[18px] py-[10px] overflow-x-auto"
-            style={{ borderBottom: "1px solid rgba(255,255,255,0.07)", scrollbarWidth: "none" }}
-          >
-            <span className="text-[10.5px] text-slate-600 font-medium mr-[2px] flex-shrink-0 whitespace-nowrap">Member:</span>
-            <Chip active={memberFilter === "All"} onClick={() => setMemberFilter("All")}>All</Chip>
-            {members.map((m) => (
-              <Chip key={m.id} active={memberFilter === m.display_name} onClick={() => setMemberFilter(m.display_name)}>
-                {m.display_name}
-              </Chip>
-            ))}
-            <div className="w-[1px] h-[15px] flex-shrink-0 mx-[3px]" style={{ background: "rgba(255,255,255,0.07)" }} />
-            <span className="text-[10.5px] text-slate-600 font-medium mr-[2px] flex-shrink-0 whitespace-nowrap">Status:</span>
+          {/* Filter chips — manager only sees member filter */}
+          <div className="flex items-center gap-[5px] px-[18px] py-[10px] overflow-x-auto"
+            style={{ borderBottom: "1px solid rgba(255,255,255,0.07)", scrollbarWidth: "none" }}>
+            {isManager && (
+              <>
+                <span className="text-[10.5px] text-slate-600 font-medium mr-[2px] flex-shrink-0">Member:</span>
+                <Chip active={memberFilter === "All"} onClick={() => setMemberFilter("All")}>All</Chip>
+                {members.map((m) => (
+                  <Chip key={m.id} active={memberFilter === m.display_name} onClick={() => setMemberFilter(m.display_name)}>
+                    {m.display_name}
+                  </Chip>
+                ))}
+                <div className="w-[1px] h-[15px] flex-shrink-0 mx-[3px]" style={{ background: "rgba(255,255,255,0.07)" }} />
+              </>
+            )}
+            <span className="text-[10.5px] text-slate-600 font-medium mr-[2px] flex-shrink-0">Status:</span>
             {STAGES.map((s) => (
               <Chip key={s} active={stageFilter === s} onClick={() => setStageFilter(stageFilter === s ? "All" : s)}>
                 {STAGE_STYLE[s].label}
@@ -194,8 +336,9 @@ export default function TasksPage() {
               <table className="w-full border-collapse text-[12.5px]">
                 <thead>
                   <tr style={{ background: "rgba(255,255,255,0.02)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-                    {["Member", "Sprint Backlog", "Brand", "Activity", "Status", "Priority", "SP Exp / Act", "Deadline"].map((h) => (
-                      <th key={h} className="px-[13px] py-[9px] text-left text-[10px] font-semibold uppercase tracking-[0.6px] whitespace-nowrap" style={{ color: "#475569" }}>
+                    {["Member", "Task", "Brand", "Activity", "Stage", "Priority", "Exp SP", "Act SP", "Deadline", "Comments"].map((h) => (
+                      <th key={h} className="px-[13px] py-[9px] text-left text-[10px] font-semibold uppercase tracking-[0.6px] whitespace-nowrap"
+                        style={{ color: "#475569" }}>
                         {h}
                       </th>
                     ))}
@@ -206,89 +349,127 @@ export default function TasksPage() {
                     const ss = STAGE_STYLE[task.stage] ?? STAGE_STYLE.WIP;
                     const ps = PRI_STYLE[task.priority] ?? PRI_STYLE.Medium;
                     const color = memberColor(task.member_name ?? "");
+                    const isSaving = saving === task.id;
+                    const leftColor = stageLeftBorder[task.stage] ?? "#64748b";
+
                     return (
-                      <tr
-                        key={task.id}
-                        className={`transition-colors ${stageRowClass[task.stage] ?? ""} ${editing === task.id ? "opacity-60" : ""}`}
-                        style={{ borderBottom: "1px solid rgba(255,255,255,0.032)" }}
-                        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.025)")}
-                        onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}
-                      >
-                        <td className="px-[13px] py-[11px] whitespace-nowrap">
+                      <tr key={task.id}
+                        className="transition-colors"
+                        style={{
+                          borderBottom: "1px solid rgba(255,255,255,0.032)",
+                          borderLeft: `3px solid ${leftColor}`,
+                          opacity: isSaving ? 0.6 : 1,
+                        }}
+                        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.02)")}
+                        onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}>
+
+                        {/* Member (read-only) */}
+                        <td className="px-[13px] py-[10px] whitespace-nowrap">
                           <div className="flex items-center gap-2">
-                            <div
-                              className="flex-shrink-0 flex items-center justify-center rounded-full text-[9px] font-bold text-white"
-                              style={{ width: 24, height: 24, background: color }}
-                            >
+                            <div className="flex-shrink-0 flex items-center justify-center rounded-full text-[9px] font-bold text-white"
+                              style={{ width: 24, height: 24, background: color }}>
                               {initials(task.member_name ?? "?")}
                             </div>
                             <span className="font-medium text-slate-100">{task.member_name}</span>
                           </div>
                         </td>
-                        <td className="px-[13px] py-[11px] max-w-[210px]">
-                          <div className="font-medium text-slate-100 whitespace-nowrap overflow-hidden text-ellipsis" title={task.sprint_backlog}>
-                            {task.sprint_backlog}
-                          </div>
-                          {task.comments && (
-                            <div className="text-[11px] text-slate-600 mt-[2px] whitespace-nowrap overflow-hidden text-ellipsis">{task.comments}</div>
+
+                        {/* Task name — editable */}
+                        <td className="px-[13px] py-[10px]" style={{ minWidth: 180 }}>
+                          <TaskNameCell task={task} field="sprint_backlog"
+                            editing={isEditing(task.id, "sprint_backlog")}
+                            onStartEdit={() => startEdit(task.id, "sprint_backlog")}
+                            onCommit={(v) => commitCell(task, "sprint_backlog", v)}
+                            onCancel={cancelEdit} />
+                        </td>
+
+                        {/* Brand — editable text */}
+                        <td className="px-[13px] py-[10px] whitespace-nowrap">
+                          <TextCell task={task} field="brand"
+                            editing={isEditing(task.id, "brand")}
+                            onStartEdit={() => startEdit(task.id, "brand")}
+                            onCommit={(v) => commitCell(task, "brand", v)}
+                            onCancel={cancelEdit} />
+                        </td>
+
+                        {/* Activity — editable text */}
+                        <td className="px-[13px] py-[10px] whitespace-nowrap">
+                          <TextCell task={task} field="activity_type"
+                            editing={isEditing(task.id, "activity_type")}
+                            onStartEdit={() => startEdit(task.id, "activity_type")}
+                            onCommit={(v) => commitCell(task, "activity_type", v)}
+                            onCancel={cancelEdit} />
+                        </td>
+
+                        {/* Stage — select */}
+                        <td className="px-[13px] py-[10px] whitespace-nowrap">
+                          <SelectCell task={task} field="stage" options={STAGES}
+                            editing={isEditing(task.id, "stage")}
+                            onStartEdit={() => startEdit(task.id, "stage")}
+                            onCommit={(v) => commitCell(task, "stage", v)}
+                            onCancel={cancelEdit}
+                            renderOption={(v) => (
+                              <span className="inline-flex items-center gap-[4px] px-[9px] py-[3px] rounded-[20px] text-[11px] font-semibold"
+                                style={{ background: (STAGE_STYLE[v] ?? ss).bg, color: (STAGE_STYLE[v] ?? ss).color }}>
+                                <span className="w-[5px] h-[5px] rounded-full flex-shrink-0" style={{ background: "currentColor" }} />
+                                {(STAGE_STYLE[v] ?? ss).label}
+                              </span>
+                            )} />
+                        </td>
+
+                        {/* Priority — select */}
+                        <td className="px-[13px] py-[10px] whitespace-nowrap">
+                          <SelectCell task={task} field="priority" options={PRIORITIES}
+                            editing={isEditing(task.id, "priority")}
+                            onStartEdit={() => startEdit(task.id, "priority")}
+                            onCommit={(v) => commitCell(task, "priority", v)}
+                            onCancel={cancelEdit}
+                            renderOption={(v) => (
+                              <div className="flex items-center gap-[4px] text-[12px]" style={{ color: (PRI_STYLE[v] ?? ps).color }}>
+                                <div className="w-[6px] h-[6px] rounded-full flex-shrink-0" style={{ background: "currentColor" }} />
+                                {v}
+                              </div>
+                            )} />
+                        </td>
+
+                        {/* Expected SP — editable number (manager only) */}
+                        <td className="px-[13px] py-[10px] whitespace-nowrap text-center">
+                          {isManager ? (
+                            <NumberCell task={task} field="expected_story_points"
+                              editing={isEditing(task.id, "expected_story_points")}
+                              onStartEdit={() => startEdit(task.id, "expected_story_points")}
+                              onCommit={(v) => commitCell(task, "expected_story_points", v)}
+                              onCancel={cancelEdit} />
+                          ) : (
+                            <span className="text-slate-400">{task.expected_story_points}</span>
                           )}
                         </td>
-                        <td className="px-[13px] py-[11px] whitespace-nowrap">
-                          {task.brand ? (
-                            <span
-                              className="inline-flex px-[8px] py-[2px] rounded-[4px] text-[11px] font-semibold"
-                              style={{ background: "rgba(139,92,246,.15)", color: "#a78bfa" }}
-                            >
-                              {task.brand}
-                            </span>
-                          ) : <span className="text-slate-600">—</span>}
+
+                        {/* Actual SP — editable number */}
+                        <td className="px-[13px] py-[10px] whitespace-nowrap text-center">
+                          <NumberCell task={task} field="actual_story_points"
+                            editing={isEditing(task.id, "actual_story_points")}
+                            onStartEdit={() => startEdit(task.id, "actual_story_points")}
+                            onCommit={(v) => commitCell(task, "actual_story_points", v)}
+                            onCancel={cancelEdit} />
                         </td>
-                        <td className="px-[13px] py-[11px] whitespace-nowrap">
-                          {task.activity_type ? (
-                            <span
-                              className="inline-flex px-[8px] py-[2px] rounded-[20px] text-[11px] font-medium"
-                              style={{ background: "rgba(255,255,255,0.06)", color: "#94a3b8" }}
-                            >
-                              {task.activity_type}
-                            </span>
-                          ) : <span className="text-slate-600">—</span>}
+
+                        {/* Deadline — editable text */}
+                        <td className="px-[13px] py-[10px] whitespace-nowrap">
+                          <TextCell task={task} field="deadline"
+                            editing={isEditing(task.id, "deadline")}
+                            onStartEdit={() => startEdit(task.id, "deadline")}
+                            onCommit={(v) => commitCell(task, "deadline", v)}
+                            onCancel={cancelEdit} />
                         </td>
-                        <td className="px-[13px] py-[11px] whitespace-nowrap">
-                          <select
-                            value={task.stage}
-                            disabled={editing === task.id}
-                            onChange={(e) => updateStage(task, e.target.value as Task["stage"])}
-                            className="rounded-[20px] text-[11px] font-semibold px-[9px] py-[3px] border-none cursor-pointer outline-none"
-                            style={{ background: ss.bg, color: ss.color }}
-                          >
-                            <option value="WIP">WIP</option>
-                            <option value="Sent for Approval">In Review</option>
-                            <option value="Closed">Closed</option>
-                          </select>
-                        </td>
-                        <td className="px-[13px] py-[11px] whitespace-nowrap">
-                          <div className="flex items-center gap-[4px] text-[12px]" style={{ color: ps.color }}>
-                            <div className="w-[6px] h-[6px] rounded-full flex-shrink-0" style={{ background: ps.dot }} />
-                            {task.priority}
-                          </div>
-                        </td>
-                        <td className="px-[13px] py-[11px] whitespace-nowrap text-center text-[12px] text-slate-400">
-                          {task.expected_story_points} /&nbsp;
-                          <input
-                            type="number"
-                            min={0}
-                            max={20}
-                            defaultValue={task.actual_story_points}
-                            disabled={editing === task.id}
-                            onBlur={(e) => {
-                              const v = parseInt(e.target.value);
-                              if (!isNaN(v) && v !== task.actual_story_points) updateActualSP(task, v);
-                            }}
-                            className="w-10 border-none outline-none text-slate-100 font-semibold bg-transparent text-center"
-                          />
-                        </td>
-                        <td className="px-[13px] py-[11px] whitespace-nowrap text-[12px] text-slate-600">
-                          {task.deadline || "—"}
+
+                        {/* Comments — editable text */}
+                        <td className="px-[13px] py-[10px]" style={{ minWidth: 140 }}>
+                          <TextCell task={task} field="comments"
+                            editing={isEditing(task.id, "comments")}
+                            onStartEdit={() => startEdit(task.id, "comments")}
+                            onCommit={(v) => commitCell(task, "comments", v)}
+                            onCancel={cancelEdit} />
                         </td>
                       </tr>
                     );
@@ -300,15 +481,16 @@ export default function TasksPage() {
 
           {/* Footer */}
           {!loading && visible.length > 0 && (
-            <div
-              className="flex items-center gap-[18px] px-[18px] py-[11px] flex-wrap"
-              style={{ borderTop: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.015)" }}
-            >
+            <div className="flex items-center gap-[18px] px-[18px] py-[11px] flex-wrap"
+              style={{ borderTop: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.015)" }}>
               {[
-                { label: "tasks", val: visible.length, color: "#94a3b8" },
-                { label: "WIP",      val: visible.filter((t) => t.stage === "WIP").length,               color: "#60a5fa" },
-                { label: "In Review",val: visible.filter((t) => t.stage === "Sent for Approval").length, color: "#fbbf24" },
-                { label: "Closed",   val: visible.filter((t) => t.stage === "Closed").length,            color: "#34d399" },
+                { label: "tasks",      val: visible.length,                                                color: "#94a3b8" },
+                { label: "WIP",        val: visible.filter((t) => t.stage === "WIP").length,               color: "#60a5fa" },
+                { label: "In Review",  val: visible.filter((t) => t.stage === "Sent for Approval").length, color: "#fbbf24" },
+                { label: "Closed",     val: visible.filter((t) => t.stage === "Closed").length,            color: "#34d399" },
+                { label: "SP done",
+                  val: `${visible.reduce((s, t) => s + (t.actual_story_points || 0), 0)} / ${visible.reduce((s, t) => s + (t.expected_story_points || 0), 0)}`,
+                  color: "#94a3b8" },
               ].map((s, i) => (
                 <span key={s.label} className="flex items-center gap-[5px] text-[12px] text-slate-600">
                   {i > 0 && <span className="inline-block w-[1px] h-[13px] mr-[13px]" style={{ background: "rgba(255,255,255,0.07)" }} />}

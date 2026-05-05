@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, type SprintProgress } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 const MEMBER_COLORS: Record<string, string> = {
   Dhwani: "#d946ef", Shaily: "#8b5cf6", Shriya: "#3b82f6",
@@ -39,17 +40,9 @@ function MetricCard({ label, value, sub, trend = "neutral", color, icon }: Metri
   return (
     <div
       className="relative overflow-hidden rounded-[12px] cursor-default transition-transform hover:-translate-y-px"
-      style={{
-        background: "#11111b",
-        border: "1px solid rgba(255,255,255,0.07)",
-        padding: "18px 20px",
-      }}
+      style={{ background: "#11111b", border: "1px solid rgba(255,255,255,0.07)", padding: "18px 20px" }}
     >
-      {/* glow blob */}
-      <div
-        className="absolute -bottom-5 -right-5 w-20 h-20 rounded-full opacity-[0.09]"
-        style={{ background: palette.glow }}
-      />
+      <div className="absolute -bottom-5 -right-5 w-20 h-20 rounded-full opacity-[0.09]" style={{ background: palette.glow }} />
       <div className="flex items-start justify-between mb-[11px]">
         <span className="text-[11px] font-medium uppercase tracking-[0.5px] text-slate-600">{label}</span>
         <div className="flex items-center justify-center w-[30px] h-[30px] rounded-[8px]" style={{ background: palette.ico, color: palette.txt }}>
@@ -63,9 +56,12 @@ function MetricCard({ label, value, sub, trend = "neutral", color, icon }: Metri
 }
 
 export default function DashboardPage() {
+  const { user } = useAuth();
   const [progress, setProgress] = useState<SprintProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const isSuperAdmin = user?.role === "super_admin";
 
   useEffect(() => {
     api.dashboard
@@ -89,31 +85,36 @@ export default function DashboardPage() {
   const teamPct = totals.expected > 0 ? Math.round((totals.actual / totals.expected) * 100) : 0;
   const activeMembers = progress.filter((p) => p.total_tasks > 0).length;
 
+  // Group by workspace for super_admin view
+  const workspaces = isSuperAdmin
+    ? [...new Map(progress.map((p) => [p.workspace_id, p.workspace_name])).entries()]
+    : [];
+
+  const tableHeaders = isSuperAdmin
+    ? ["Member", "Team", "WIP", "In Review", "Closed", "Total", "Exp SP", "Act SP", "Blocked by", "Progress"]
+    : ["Member", "WIP", "In Review", "Closed", "Total", "Exp SP", "Act SP", "Blocked by", "Progress"];
+
   return (
     <>
       {/* Topbar */}
       <div
         className="sticky top-0 z-10 flex items-center justify-between px-[26px] py-[13px]"
-        style={{
-          background: "rgba(9,9,15,0.88)",
-          backdropFilter: "blur(14px)",
-          borderBottom: "1px solid rgba(255,255,255,0.07)",
-        }}
+        style={{ background: "rgba(9,9,15,0.88)", backdropFilter: "blur(14px)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}
       >
         <div>
-          <h1 className="text-[19px] font-bold text-slate-100 tracking-[-0.5px]">Dashboard</h1>
+          <h1 className="text-[19px] font-bold text-slate-100 tracking-[-0.5px]">
+            {isSuperAdmin ? "Org Overview" : "Dashboard"}
+          </h1>
           <p className="text-[11.5px] text-slate-600 mt-[2px]">
-            {activeMembers} member{activeMembers !== 1 ? "s" : ""} active this sprint
+            {isSuperAdmin
+              ? `${workspaces.length} team${workspaces.length !== 1 ? "s" : ""} · ${activeMembers} active members`
+              : `${activeMembers} member${activeMembers !== 1 ? "s" : ""} active this sprint`}
           </p>
         </div>
         <div className="flex items-center gap-[9px]">
           <div
             className="flex items-center gap-[5px] px-[11px] py-[5px] rounded-[7px] text-[12px] font-medium cursor-default"
-            style={{
-              border: "1px solid rgba(217,70,239,0.22)",
-              background: "rgba(217,70,239,0.07)",
-              color: "#e879f9",
-            }}
+            style={{ border: "1px solid rgba(217,70,239,0.22)", background: "rgba(217,70,239,0.07)", color: "#e879f9" }}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-[13px] h-[13px]">
               <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
@@ -173,9 +174,9 @@ export default function DashboardPage() {
               }
             />
             <MetricCard
-              label="Team Overview"
-              value={`${activeMembers} / ${progress.length}`}
-              sub={`${totals.wip} tasks in progress`}
+              label={isSuperAdmin ? "Teams / Members" : "Team Overview"}
+              value={isSuperAdmin ? `${workspaces.length} / ${progress.length}` : `${activeMembers} / ${progress.length}`}
+              sub={isSuperAdmin ? `${activeMembers} active members` : `${totals.wip} tasks in progress`}
               trend="neutral"
               color="blue"
               icon={
@@ -190,17 +191,13 @@ export default function DashboardPage() {
         )}
 
         {/* Sprint progress table */}
-        <div
-          className="rounded-[12px] overflow-hidden"
-          style={{ background: "#11111b", border: "1px solid rgba(255,255,255,0.07)" }}
-        >
-          <div
-            className="flex items-center justify-between px-[18px] py-[15px]"
-            style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
-          >
+        <div className="rounded-[12px] overflow-hidden" style={{ background: "#11111b", border: "1px solid rgba(255,255,255,0.07)" }}>
+          <div className="flex items-center justify-between px-[18px] py-[15px]" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
             <div>
               <h2 className="text-[14px] font-semibold text-slate-100">Sprint Progress</h2>
-              <p className="text-[11.5px] text-slate-600 mt-[2px]">Per-member breakdown</p>
+              <p className="text-[11.5px] text-slate-600 mt-[2px]">
+                {isSuperAdmin ? "All teams · per-member breakdown" : "Per-member breakdown"}
+              </p>
             </div>
           </div>
 
@@ -215,7 +212,7 @@ export default function DashboardPage() {
               <table className="w-full border-collapse text-[12.5px]">
                 <thead>
                   <tr style={{ background: "rgba(255,255,255,0.02)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-                    {["Member", "WIP", "In Review", "Closed", "Total", "Exp SP", "Act SP", "Progress"].map((h) => (
+                    {tableHeaders.map((h) => (
                       <th
                         key={h}
                         className="px-[13px] py-[9px] text-left text-[10px] font-semibold uppercase tracking-[0.6px] whitespace-nowrap"
@@ -249,6 +246,14 @@ export default function DashboardPage() {
                             <span className="font-medium text-slate-100">{p.member}</span>
                           </div>
                         </td>
+                        {isSuperAdmin && (
+                          <td className="px-[13px] py-[11px] whitespace-nowrap">
+                            <span className="text-[11px] px-[8px] py-[2px] rounded-[5px]"
+                              style={{ background: "rgba(99,102,241,0.1)", color: "#818cf8" }}>
+                              {p.workspace_name || "—"}
+                            </span>
+                          </td>
+                        )}
                         <td className="px-[13px] py-[11px] whitespace-nowrap">
                           <span className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-[20px] text-[11px] font-semibold" style={{ background: "rgba(59,130,246,.12)", color: "#60a5fa" }}>
                             {p.wip}
@@ -267,15 +272,30 @@ export default function DashboardPage() {
                         <td className="px-[13px] py-[11px] whitespace-nowrap text-slate-400">{p.total_tasks}</td>
                         <td className="px-[13px] py-[11px] whitespace-nowrap text-slate-400">{p.expected_sp}</td>
                         <td className="px-[13px] py-[11px] whitespace-nowrap font-semibold text-slate-100">{p.actual_sp}</td>
+                        <td className="px-[13px] py-[11px] max-w-[200px]">
+                          {p.dependencies && p.dependencies.length > 0 ? (
+                            <div className="flex flex-col gap-[3px]">
+                              {p.dependencies.map((dep, i) => (
+                                <span
+                                  key={i}
+                                  className="inline-block text-[10.5px] px-[7px] py-[2px] rounded-[5px] truncate max-w-[180px]"
+                                  style={{ background: "rgba(239,68,68,0.1)", color: "#f87171" }}
+                                  title={dep}
+                                >
+                                  {dep}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-slate-700">—</span>
+                          )}
+                        </td>
                         <td className="px-[13px] py-[11px] whitespace-nowrap min-w-[120px]">
                           <div className="flex items-center gap-2">
                             <div className="flex-1 h-[5px] rounded-full" style={{ background: "rgba(255,255,255,0.07)" }}>
                               <div
                                 className="h-full rounded-full transition-all"
-                                style={{
-                                  width: `${Math.min(pct, 100)}%`,
-                                  background: pct >= 80 ? "#10b981" : pct >= 50 ? "#d946ef" : "#f59e0b",
-                                }}
+                                style={{ width: `${Math.min(pct, 100)}%`, background: pct >= 80 ? "#10b981" : pct >= 50 ? "#d946ef" : "#f59e0b" }}
                               />
                             </div>
                             <span className="text-[11px] text-slate-400 w-8 text-right">{pct}%</span>

@@ -228,14 +228,13 @@ async def list_members(
 
 async def list_all_members(
     db: AsyncSession,
-    workspace_id: int = DEFAULT_WORKSPACE_ID,
+    workspace_id: int | None = DEFAULT_WORKSPACE_ID,
 ) -> list[dict]:
-    """Return member records as dicts for the API layer."""
-    result = await db.execute(
-        select(Member)
-        .where(Member.workspace_id == workspace_id)
-        .order_by(Member.display_name)
-    )
+    """Return member records as dicts for the API layer. workspace_id=None returns all."""
+    query = select(Member).order_by(Member.display_name)
+    if workspace_id is not None:
+        query = query.where(Member.workspace_id == workspace_id)
+    result = await db.execute(query)
     members = result.scalars().all()
     return [
         {
@@ -376,14 +375,15 @@ async def list_tasks(
     db: AsyncSession,
     member_name: str | None = None,
     stage: str | None = None,
-    workspace_id: int = DEFAULT_WORKSPACE_ID,
+    workspace_id: int | None = DEFAULT_WORKSPACE_ID,
 ) -> list[dict]:
-    """API endpoint helper — list tasks with optional filters."""
+    """API endpoint helper — list tasks with optional filters. workspace_id=None returns all."""
     query = (
         select(Task, Member.display_name)
         .join(Member, Task.member_id == Member.id)
-        .where(Member.workspace_id == workspace_id)
     )
+    if workspace_id is not None:
+        query = query.where(Member.workspace_id == workspace_id)
     if member_name:
         query = query.where(Member.display_name == member_name)
     if stage:
@@ -561,15 +561,17 @@ async def update_task(db: AsyncSession, task_id: int, fields: dict) -> dict | No
 
 async def get_sprint_progress(
     db: AsyncSession,
-    workspace_id: int = DEFAULT_WORKSPACE_ID,
+    workspace_id: int | None = DEFAULT_WORKSPACE_ID,
 ) -> list[dict]:
-    """Per-member sprint progress (actual vs expected story points)."""
-    result = await db.execute(
+    """Per-member sprint progress (actual vs expected story points). workspace_id=None returns all."""
+    query = (
         select(Member)
-        .where(Member.workspace_id == workspace_id)
-        .options(selectinload(Member.tasks))
+        .options(selectinload(Member.tasks), selectinload(Member.workspace))
         .order_by(Member.display_name)
     )
+    if workspace_id is not None:
+        query = query.where(Member.workspace_id == workspace_id)
+    result = await db.execute(query)
     members = result.scalars().all()
 
     progress = []
@@ -580,9 +582,18 @@ async def get_sprint_progress(
         wip = sum(1 for t in tasks if t.stage == "WIP")
         closed = sum(1 for t in tasks if t.stage == "Closed")
         approval = sum(1 for t in tasks if t.stage == "Sent for Approval")
+        ws_name = m.workspace.name if m.workspace else ""
+        wip_tasks = [t for t in tasks if t.stage == "WIP"]
+        dependencies = sorted({
+            t.dependency.strip()
+            for t in wip_tasks
+            if t.dependency and t.dependency.strip()
+        })
         progress.append({
             "member": m.display_name,
             "member_id": m.id,
+            "workspace_id": m.workspace_id,
+            "workspace_name": ws_name,
             "total_tasks": len(tasks),
             "wip": wip,
             "closed": closed,
@@ -590,21 +601,24 @@ async def get_sprint_progress(
             "expected_sp": expected,
             "actual_sp": actual,
             "pct": round((actual / expected) * 100) if expected > 0 else 0,
+            "dependencies": dependencies,
         })
     return progress
 
 
 async def get_wip_summary(
     db: AsyncSession,
-    workspace_id: int = DEFAULT_WORKSPACE_ID,
+    workspace_id: int | None = DEFAULT_WORKSPACE_ID,
 ) -> list[dict]:
-    """Top WIP tasks per member for the morning summary."""
-    result = await db.execute(
+    """Top WIP tasks per member for the morning summary. workspace_id=None returns all."""
+    query = (
         select(Member)
-        .where(Member.workspace_id == workspace_id)
         .options(selectinload(Member.tasks))
         .order_by(Member.display_name)
     )
+    if workspace_id is not None:
+        query = query.where(Member.workspace_id == workspace_id)
+    result = await db.execute(query)
     members = result.scalars().all()
 
     summary = []

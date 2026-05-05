@@ -36,7 +36,7 @@ from fastapi.responses import RedirectResponse, HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings, get_sprint_end_date
+from app.config import settings, get_sprint_end_date, GRAPH_BASE_URL
 from app.teams_capture import extract_metadata, is_eod_message, validate_eod
 from app.ai_parser import parse_eod
 from app.validator import validate_all
@@ -72,15 +72,21 @@ logger = logging.getLogger(__name__)
 
 
 async def _seed_manager(db) -> None:
-    """Create the default manager account if it doesn't exist yet."""
+    """Ensure a super_admin account exists. Upgrades legacy manager account if needed."""
     from sqlalchemy import select
     from app.db.models import User
     from app.auth import hash_password
+
     result = await db.execute(select(User).where(User.username == "manager"))
-    if result.scalar_one_or_none() is None:
-        db.add(User(username="manager", password_hash=hash_password(settings.MANAGER_PASSWORD), role="manager"))
+    user = result.scalar_one_or_none()
+    if user is None:
+        db.add(User(username="manager", password_hash=hash_password(settings.MANAGER_PASSWORD), role="super_admin"))
         await db.commit()
-        logger.info("Created default manager account (username: manager)")
+        logger.info("Created default super_admin account (username: manager)")
+    elif user.role == "manager":
+        user.role = "super_admin"
+        await db.commit()
+        logger.info("Upgraded legacy manager account to super_admin")
 
 
 @asynccontextmanager
@@ -245,7 +251,7 @@ async def _process_backlog_command(sender: str, message: str, db: AsyncSession) 
 
 
 async def _process_eod(
-    sender: str, clean_message: str, timestamp: str, db: AsyncSession
+    sender: str, clean_message: str, timestamp: str, db: AsyncSession, workspace_id: int = 1,
 ) -> PipelineResult:
     """
     Full EOD pipeline (DB-backed):

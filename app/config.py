@@ -53,8 +53,9 @@ class Settings(BaseSettings):
     HOST: str = Field(default="0.0.0.0", description="Server host")
     PORT: int = Field(default=8000, description="Server port")
     LOG_LEVEL: str = Field(default="INFO", description="Logging level")
+    DATABASE_URL: str = Field(default="sqlite+aiosqlite:///./agile_copilot.db", description="Database connection URL")
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 
 settings = Settings()
