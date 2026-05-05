@@ -8,15 +8,15 @@ const STAGES: Task["stage"][] = ["WIP", "Sent for Approval", "Closed"];
 const PRIORITIES: Task["priority"][] = ["High", "Medium", "Low"];
 
 const STAGE_STYLE: Record<string, { bg: string; color: string; label: string }> = {
-  WIP:                 { bg: "rgba(59,130,246,.12)",  color: "#60a5fa",  label: "WIP" },
-  "Sent for Approval": { bg: "rgba(245,158,11,.12)",  color: "#fbbf24",  label: "In Review" },
-  Closed:              { bg: "rgba(16,185,129,.12)",  color: "#34d399",  label: "Closed" },
+  WIP: { bg: "rgba(59,130,246,.12)", color: "#60a5fa", label: "WIP" },
+  "Sent for Approval": { bg: "rgba(245,158,11,.12)", color: "#fbbf24", label: "In Review" },
+  Closed: { bg: "rgba(16,185,129,.12)", color: "#34d399", label: "Closed" },
 };
 
 const PRI_STYLE: Record<string, { color: string }> = {
-  High:   { color: "#f87171" },
+  High: { color: "#f87171" },
   Medium: { color: "#fbbf24" },
-  Low:    { color: "#475569" },
+  Low: { color: "#475569" },
 };
 
 const MEMBER_COLORS: Record<string, string> = {
@@ -189,7 +189,6 @@ export default function TasksPage() {
   const [saving, setSaving] = useState<number | null>(null);
   const [editingCell, setEditingCell] = useState<EditingCell>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
-  const [countdown, setCountdown] = useState(30);
   const [, startTransition] = useTransition();
 
 
@@ -222,17 +221,9 @@ export default function TasksPage() {
 
   // Auto-poll every 30 seconds
   useEffect(() => {
-    setCountdown(30);
     const pollInterval = setInterval(() => load(true), 30_000);
-    const tickInterval = setInterval(() => {
-      setCountdown((c) => {
-        if (c <= 1) { return 30; }
-        return c - 1;
-      });
-    }, 1000);
     return () => {
       clearInterval(pollInterval);
-      clearInterval(tickInterval);
     };
   }, [load]);
 
@@ -302,19 +293,6 @@ export default function TasksPage() {
             )}
           </p>
         </div>
-        {/* Refresh button + countdown */}
-        <button
-          id="tasks-refresh-btn"
-          onClick={() => { load(false); setCountdown(30); }}
-          className="flex items-center gap-[6px] px-[11px] py-[6px] rounded-[8px] text-[12px] font-medium transition-all cursor-pointer"
-          style={{ border: "1px solid rgba(217,70,239,0.22)", background: "rgba(217,70,239,0.07)", color: "#e879f9" }}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-[13px] h-[13px]">
-            <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
-            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-          </svg>
-          Refresh <span className="opacity-50 text-[10px]">({countdown}s)</span>
-        </button>
       </div>
 
       <div className="p-[26px]">
@@ -339,7 +317,7 @@ export default function TasksPage() {
               style={{ border: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
                 className="w-[13px] h-[13px] text-slate-600 flex-shrink-0">
-                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
               <input type="text" placeholder="Search…" value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -371,18 +349,18 @@ export default function TasksPage() {
           </div>
 
           {/* Table */}
-          <div className="overflow-x-auto">
+          <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 220px)" }}>
             {loading ? (
               <div className="px-[18px] py-10 text-center text-[13px] text-slate-600">Loading tasks…</div>
             ) : visible.length === 0 ? (
               <div className="px-[18px] py-12 text-center text-[13px] text-slate-600">No tasks match your filters.</div>
             ) : (
               <table className="w-full border-collapse text-[12.5px]">
-                <thead>
-                  <tr style={{ background: "rgba(255,255,255,0.02)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                <thead className="sticky top-0 z-10">
+                  <tr>
                     {["Member", "Task", "Brand", "Activity", "Stage", "Priority", "Exp SP", "Act SP", "Deadline", "Comments"].map((h) => (
                       <th key={h} className="px-[13px] py-[9px] text-left text-[10px] font-semibold uppercase tracking-[0.6px] whitespace-nowrap"
-                        style={{ color: "#475569" }}>
+                        style={{ color: "#475569", background: "#11111b", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
                         {h}
                       </th>
                     ))}
@@ -528,13 +506,15 @@ export default function TasksPage() {
             <div className="flex items-center gap-[18px] px-[18px] py-[11px] flex-wrap"
               style={{ borderTop: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.015)" }}>
               {[
-                { label: "tasks",      val: visible.length,                                                color: "#94a3b8" },
-                { label: "WIP",        val: visible.filter((t) => t.stage === "WIP").length,               color: "#60a5fa" },
-                { label: "In Review",  val: visible.filter((t) => t.stage === "Sent for Approval").length, color: "#fbbf24" },
-                { label: "Closed",     val: visible.filter((t) => t.stage === "Closed").length,            color: "#34d399" },
-                { label: "SP done",
+                { label: "tasks", val: visible.length, color: "#94a3b8" },
+                { label: "WIP", val: visible.filter((t) => t.stage === "WIP").length, color: "#60a5fa" },
+                { label: "In Review", val: visible.filter((t) => t.stage === "Sent for Approval").length, color: "#fbbf24" },
+                { label: "Closed", val: visible.filter((t) => t.stage === "Closed").length, color: "#34d399" },
+                {
+                  label: "SP done",
                   val: `${visible.reduce((s, t) => s + (t.actual_story_points || 0), 0)} / ${visible.reduce((s, t) => s + (t.expected_story_points || 0), 0)}`,
-                  color: "#94a3b8" },
+                  color: "#94a3b8"
+                },
               ].map((s, i) => (
                 <span key={s.label} className="flex items-center gap-[5px] text-[12px] text-slate-600">
                   {i > 0 && <span className="inline-block w-[1px] h-[13px] mr-[13px]" style={{ background: "rgba(255,255,255,0.07)" }} />}

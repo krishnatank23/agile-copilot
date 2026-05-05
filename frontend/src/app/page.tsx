@@ -110,7 +110,7 @@ export default function DashboardPage() {
 
   // Group by workspace for super_admin view
   const workspaces = isSuperAdmin
-    ? [...new Map(progress.map((p) => [p.workspace_id, p.workspace_name])).entries()]
+    ? Array.from(new Map(progress.map((p) => [p.workspace_id, p.workspace_name])))
     : [];
 
   const tableHeaders = isSuperAdmin
@@ -239,7 +239,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 380px)" }}>
             {loading ? (
               <div className="px-[18px] py-10 text-center text-[13px] text-slate-600">Loading…</div>
             ) : progress.length === 0 && !error ? (
@@ -248,13 +248,13 @@ export default function DashboardPage() {
               </div>
             ) : (
               <table className="w-full border-collapse text-[12.5px]">
-                <thead>
-                  <tr style={{ background: "rgba(255,255,255,0.02)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                <thead className="sticky top-0 z-10">
+                  <tr>
                     {tableHeaders.map((h) => (
                       <th
                         key={h}
                         className="px-[13px] py-[9px] text-left text-[10px] font-semibold uppercase tracking-[0.6px] whitespace-nowrap"
-                        style={{ color: "#475569" }}
+                        style={{ color: "#475569", background: "#15151f", borderBottom: "1px solid rgba(255,255,255,0.07)" }}
                       >
                         {h}
                       </th>
