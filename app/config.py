@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     AGILE_CHAT_ID: str = Field(default="", description="MS Teams group chat ID for agile summaries (morning, WIP, progress). Falls back to CHAT_ID if not set.")
     WEBHOOK_NOTIFICATION_URL: str = Field(
         default="",
-        description="Public URL for Graph API subscription notifications (e.g. https://your-server.com/api/graph-webhook)",
+        description="Public base URL for Graph API notifications (e.g. https://your-server.com) or full endpoint (.../api/graph-webhook)",
     )
     REDIRECT_URI: str = Field(
         default="",
@@ -118,6 +118,16 @@ BACKLOG_PROMOTION_THRESHOLD = 0.65
 
 # Microsoft Graph API base URL
 GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
+
+
+def build_graph_notification_url(base_or_full_url: str) -> str:
+    """Return a valid Graph notification endpoint, tolerating both base and full URL input."""
+    value = (base_or_full_url or "").strip().rstrip("/")
+    if not value:
+        return ""
+    if value.endswith("/api/graph-webhook"):
+        return value
+    return f"{value}/api/graph-webhook"
 
 
 def get_sprint_end_date(ref_date: date | None = None) -> str:

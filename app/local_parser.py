@@ -6,6 +6,7 @@ Handles the 80% case using string manipulation and keyword matching.
 import re
 import logging
 from app.config import get_sprint_end_date, KNOWN_BRANDS, BRAND_PARENT, ACTIVITY_TYPES
+from app.teams_capture import validate_eod
 
 logger = logging.getLogger(__name__)
 
@@ -182,22 +183,14 @@ def _estimate_story_points(task_name: str, quantity: int) -> int:
     return max(1, min(13, total))
 
 
-async def _match_backlog(task_name: str, backlog_list: list[str]) -> str | None:
+def _match_backlog_sync(task_name: str, backlog_list: list[str]) -> str | None:
     """
-    Match a task name against backlog items using semantic similarity.
-    Falls back to word-overlap if embedding API is unavailable.
+    Match a task name against backlog items using word overlap.
+    This stays synchronous so the local parser can be used from tests
+    and from the async AI fallback path without an event-loop bridge.
     """
     if not backlog_list:
         return None
-
-    # --- Semantic match ---
-    try:
-        from app.embeddings import find_best_match
-        matched, _ = await find_best_match(task_name, backlog_list, threshold=0.80)
-        if matched:
-            return matched
-    except Exception:
-        pass
 
     # --- Word-overlap fallback ---
     task_lower = task_name.lower().strip()
@@ -226,6 +219,11 @@ async def _match_backlog(task_name: str, backlog_list: list[str]) -> str | None:
     return best_match if best_score >= 0.7 else None
 
 
+async def _match_backlog(task_name: str, backlog_list: list[str]) -> str | None:
+    """Async compatibility wrapper for older call sites."""
+    return _match_backlog_sync(task_name, backlog_list)
+
+
 def _is_bullet_line(text: str) -> bool:
     """Check if a line starts with a bullet or number prefix."""
     return bool(re.match(r"^\s*[-•*]\s*(.+)|^\s*\d+[.)]\s*(.+)", text))
@@ -238,7 +236,7 @@ def _smart_title(text: str) -> str:
     return text
 
 
-async def parse_eod_local(eod_text: str, context: dict) -> list[dict]:
+def parse_eod_local(eod_text: str, context: dict) -> list[dict]:
     """
     Parse an EOD message using regex / keyword rules. No AI needed.
 
@@ -256,6 +254,10 @@ async def parse_eod_local(eod_text: str, context: dict) -> list[dict]:
     """
     sprint_end = context.get("sprint_end_date", get_sprint_end_date())
     backlog_list = context.get("backlog_list", [])
+
+    if not validate_eod(eod_text):
+        logger.info("Local parser skipped non-EOD message")
+        return []
 
     lines = eod_text.strip().split("\n")
     tasks = []
@@ -335,7 +337,7 @@ async def parse_eod_local(eod_text: str, context: dict) -> list[dict]:
         activity_type = _detect_activity_type(task_text)
 
         # Detect priority and stage
-        priority = ""
+        priority = _detect_priority(task_text)
         stage = _detect_stage(task_text)
 
         # Clean task name: remove progress prefixes like "Worked on", "Working on"
@@ -347,36 +349,12 @@ async def parse_eod_local(eod_text: str, context: dict) -> list[dict]:
             task_text,
             flags=re.IGNORECASE,
         ).strip()
-        # Remove trailing: "task — done", "task - completed", "task (done)"
-        clean_name = re.sub(
-            r"\s*[—–\-]\s*(done|completed|finished|delivered|closed|shipped|"
-            r"finalized|published|uploaded|handed over|handover)\s*$",
-            "",
-            clean_name,
-            flags=re.IGNORECASE,
-        )
-        # Remove suffix without dash: "task done", "task completed"
-        clean_name = re.sub(
-            r"\s+(done|completed|finished|delivered|closed|shipped|"
-            r"finalized|published|uploaded)\s*$",
-            "",
-            clean_name,
-            flags=re.IGNORECASE,
-        )
-        # Remove prefix: "completed task", "done - task"
-        clean_name = re.sub(
-            r"^(done|completed|finished|delivered|closed|shipped)\s*[—–\-]?\s*",
-            "",
-            clean_name,
-            flags=re.IGNORECASE,
-        ).strip()
-
         # Extract parenthetical notes from task name → move to comments
         bracket_notes = re.findall(r"\(([^)]+)\)", clean_name)
         clean_name = re.sub(r"\s*\([^)]+\)", "", clean_name).strip()
 
         # Backlog matching
-        backlog_match = await _match_backlog(clean_name, backlog_list)
+        backlog_match = _match_backlog_sync(clean_name, backlog_list)
 
         # Build comments
         comments_parts = []

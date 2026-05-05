@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useTransition } from "react";
 import { api, type Task, type Member } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -188,9 +188,14 @@ export default function TasksPage() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState<number | null>(null);
   const [editingCell, setEditingCell] = useState<EditingCell>(null);
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const [countdown, setCountdown] = useState(30);
+  const [, startTransition] = useTransition();
 
-  const load = useCallback(async () => {
-    setLoading(true);
+
+
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [t, m] = await Promise.all([
         api.tasks.list({
@@ -199,16 +204,37 @@ export default function TasksPage() {
         }),
         api.members.list(),
       ]);
-      setTasks(t);
-      setMembers(m);
+      startTransition(() => {
+        setTasks(t);
+        setMembers(m);
+        setLastRefreshed(new Date());
+        setError("");
+      });
     } catch {
       setError("Could not load tasks — is the backend running?");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [memberFilter, stageFilter]);
 
+  // Initial load
   useEffect(() => { load(); }, [load]);
+
+  // Auto-poll every 30 seconds
+  useEffect(() => {
+    setCountdown(30);
+    const pollInterval = setInterval(() => load(true), 30_000);
+    const tickInterval = setInterval(() => {
+      setCountdown((c) => {
+        if (c <= 1) { return 30; }
+        return c - 1;
+      });
+    }, 1000);
+    return () => {
+      clearInterval(pollInterval);
+      clearInterval(tickInterval);
+    };
+  }, [load]);
 
   async function commitCell(task: Task, field: keyof Task, rawValue: string | number) {
     setEditingCell(null);
@@ -241,6 +267,8 @@ export default function TasksPage() {
     return editingCell?.id === taskId && editingCell?.field === field;
   }
 
+
+
   const q = search.toLowerCase();
   const visible = tasks.filter((t) => {
     if (!q) return true;
@@ -269,8 +297,24 @@ export default function TasksPage() {
           </h1>
           <p className="text-[11.5px] text-slate-600 mt-[2px]">
             {visible.length} task{visible.length !== 1 ? "s" : ""} · click any cell to edit
+            {lastRefreshed && (
+              <span className="ml-2 opacity-50">· synced {lastRefreshed.toLocaleTimeString()}</span>
+            )}
           </p>
         </div>
+        {/* Refresh button + countdown */}
+        <button
+          id="tasks-refresh-btn"
+          onClick={() => { load(false); setCountdown(30); }}
+          className="flex items-center gap-[6px] px-[11px] py-[6px] rounded-[8px] text-[12px] font-medium transition-all cursor-pointer"
+          style={{ border: "1px solid rgba(217,70,239,0.22)", background: "rgba(217,70,239,0.07)", color: "#e879f9" }}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-[13px] h-[13px]">
+            <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+          Refresh <span className="opacity-50 text-[10px]">({countdown}s)</span>
+        </button>
       </div>
 
       <div className="p-[26px]">

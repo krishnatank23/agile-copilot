@@ -27,7 +27,7 @@ from fastapi.responses import RedirectResponse, HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings, GRAPH_BASE_URL
+from app.config import settings, GRAPH_BASE_URL, build_graph_notification_url
 from app.auth import get_current_user, require_super_admin
 from app.db.database import get_db
 from app.db import crud
@@ -185,13 +185,14 @@ async def subscribe_workspace(workspace_id: int, db: AsyncSession = Depends(get_
     webhook_url = ws.teams_webhook_url or settings.WEBHOOK_NOTIFICATION_URL
     if not webhook_url:
         raise HTTPException(status_code=400, detail="teams_webhook_url not configured")
+    notification_url = build_graph_notification_url(webhook_url)
 
     from datetime import datetime, timedelta
     expiry = (datetime.utcnow() + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S.0000000Z")
 
     payload = {
         "changeType": "created",
-        "notificationUrl": f"{webhook_url.rstrip('/')}/api/graph-webhook",
+        "notificationUrl": notification_url,
         "resource": f"chats/{ws.teams_chat_id}/messages",
         "expirationDateTime": expiry,
         "clientState": adapter.client_state(),

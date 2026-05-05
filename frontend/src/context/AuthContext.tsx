@@ -31,10 +31,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const token = getToken();
     if (!token) { setLoading(false); return; }
+    const timer = window.setTimeout(() => {
+      clearToken();
+      setLoading(false);
+    }, 10000);
+
     api.auth.me()
       .then(setUser)
       .catch(() => { clearToken(); })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        window.clearTimeout(timer);
+        setLoading(false);
+      });
   }, []);
 
   const login = useCallback(async (username: string, password: string) => {

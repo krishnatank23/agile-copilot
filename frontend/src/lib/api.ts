@@ -59,16 +59,27 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE}${path}`, { headers, ...init });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 10000);
 
-  if (res.status === 401) {
-    clearToken();
-    if (typeof window !== "undefined") window.location.href = "/login";
-    throw new Error("Unauthenticated");
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      headers,
+      ...init,
+      signal: controller.signal,
+    });
+
+    if (res.status === 401) {
+      clearToken();
+      if (typeof window !== "undefined") window.location.href = "/login";
+      throw new Error("Unauthenticated");
+    }
+
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    return res.json();
+  } finally {
+    window.clearTimeout(timeout);
   }
-
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-  return res.json();
 }
 
 // ── API surface ───────────────────────────────────────────────────────────────
@@ -112,12 +123,28 @@ export const api = {
     },
     update: (id: number, fields: Partial<Task>) =>
       request<Task>(`/tasks/${id}`, { method: "PATCH", body: JSON.stringify(fields) }),
+    eodWebhook: (sender: string, message: string) =>
+      request<{ status: string; member: string; tasks_parsed: number; tasks_appended: number; tasks_updated: number; errors: string[] }>(
+        "/eod-webhook",
+        { method: "POST", body: JSON.stringify({ sender, message, timestamp: new Date().toISOString() }) }
+      ),
   },
   members: {
     list: () => request<Member[]>("/members"),
+    create: (body: { display_name: string; workspace_id?: number }) =>
+      request<Member>("/members", { method: "POST", body: JSON.stringify(body) }),
   },
   dashboard: {
     sprintProgress: () => request<SprintProgress[]>("/dashboard/sprint-progress"),
     wipSummary: () => request<{ member: string; wip_tasks: Task[] }[]>("/dashboard/wip-summary"),
+    webhookDebug: () => request<{
+      config: { agile_chat_id: string; webhook_url: string; azure_client_id: string };
+      subscription: { active: boolean; id: string | null; expires_at: string | null; error: string };
+      webhook_reachable: boolean;
+      webhook_error: string;
+      graph_subscriptions: { id: string; resource: string; expirationDateTime: string; notificationUrl: string }[];
+      processed_messages_in_cache: number;
+      diagnosis: string[];
+    }>("/webhook-debug"),
   },
 };

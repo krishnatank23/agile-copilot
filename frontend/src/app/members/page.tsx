@@ -77,6 +77,133 @@ function CreateLoginModal({
   );
 }
 
+function AddMemberModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (member: Member, createdLogin: boolean) => void;
+}) {
+  const [displayName, setDisplayName] = useState("");
+  const [createLoginNow, setCreateLoginNow] = useState(true);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  function normalizeUsername(name: string) {
+    return name.toLowerCase().replace(/\s+/g, "").replace(/[^a-z0-9_.-]/g, "");
+  }
+
+  function onDisplayNameChange(name: string) {
+    setDisplayName(name);
+    if (!username) {
+      setUsername(normalizeUsername(name));
+    }
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr("");
+    try {
+      const created = await api.members.create({ display_name: displayName.trim() });
+      let createdLogin = false;
+      if (createLoginNow) {
+        if (!username.trim() || !password.trim()) {
+          throw new Error("Username and password are required to create login");
+        }
+        await api.auth.createUser({
+          username: username.trim(),
+          password: password.trim(),
+          role: "member",
+          member_id: created.id,
+        });
+        createdLogin = true;
+      }
+      onCreated(created, createdLogin);
+      onClose();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Failed to add member");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)" }}>
+      <form
+        onSubmit={submit}
+        className="rounded-[14px] p-6 flex flex-col gap-4 w-full max-w-sm"
+        style={{ background: "#11111b", border: "1px solid rgba(217,70,239,0.2)" }}
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-[14px] font-semibold text-slate-100">Add Team Member</p>
+          <button type="button" onClick={onClose} className="text-slate-600 hover:text-slate-400 text-[20px] leading-none">x</button>
+        </div>
+        <div className="flex flex-col gap-[6px]">
+          <label className="text-[12px] font-medium text-slate-400">Display Name</label>
+          <input
+            value={displayName}
+            onChange={(e) => onDisplayNameChange(e.target.value)}
+            required
+            placeholder="e.g. Priya Shah"
+            className="px-3 py-2 rounded-[8px] text-[13px] text-slate-100 outline-none placeholder:text-slate-600"
+            style={{ background: "#09090f", border: "1px solid rgba(255,255,255,0.07)" }}
+          />
+        </div>
+        <label className="flex items-center gap-2 text-[12px] text-slate-400">
+          <input
+            type="checkbox"
+            checked={createLoginNow}
+            onChange={(e) => setCreateLoginNow(e.target.checked)}
+          />
+          Create login now
+        </label>
+        {createLoginNow && (
+          <>
+            <div className="flex flex-col gap-[6px]">
+              <label className="text-[12px] font-medium text-slate-400">Username</label>
+              <input
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required={createLoginNow}
+                placeholder="e.g. priyashah"
+                className="px-3 py-2 rounded-[8px] text-[13px] text-slate-100 outline-none placeholder:text-slate-600"
+                style={{ background: "#09090f", border: "1px solid rgba(255,255,255,0.07)" }}
+              />
+            </div>
+            <div className="flex flex-col gap-[6px]">
+              <label className="text-[12px] font-medium text-slate-400">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required={createLoginNow}
+                placeholder="Set temporary password"
+                className="px-3 py-2 rounded-[8px] text-[13px] text-slate-100 outline-none placeholder:text-slate-600"
+                style={{ background: "#09090f", border: "1px solid rgba(255,255,255,0.07)" }}
+              />
+            </div>
+          </>
+        )}
+        {err && <p className="text-[11px]" style={{ color: "#f87171" }}>{err}</p>}
+        <div className="flex gap-3 pt-1">
+          <button
+            type="submit"
+            disabled={busy}
+            className="flex-1 py-2 rounded-[8px] text-[12px] font-semibold disabled:opacity-50"
+            style={{ background: "linear-gradient(135deg,#d946ef,#9333ea)", color: "#fff" }}
+          >
+            {busy ? "Adding..." : "Add Member"}
+          </button>
+          <button type="button" onClick={onClose} className="px-4 py-2 text-[12px] text-slate-600 hover:text-slate-400">Cancel</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function MembersPage() {
   const { user } = useAuth();
   const [members, setMembers] = useState<Member[]>([]);
@@ -85,6 +212,7 @@ export default function MembersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [createFor, setCreateFor] = useState<Member | null>(null);
+  const [showAddMember, setShowAddMember] = useState(false);
 
   const isManager = user?.role === "manager" || user?.role === "super_admin";
 
@@ -117,6 +245,18 @@ export default function MembersPage() {
         />
       )}
 
+      {showAddMember && (
+        <AddMemberModal
+          onClose={() => setShowAddMember(false)}
+          onCreated={(created, createdLogin) => {
+            setMembers((prev) => [created, ...prev]);
+            if (createdLogin) {
+              setExistingUsers((prev) => [...prev, { member_id: created.id }]);
+            }
+          }}
+        />
+      )}
+
       {/* Topbar */}
       <div className="sticky top-0 z-10 flex items-center justify-between px-[26px] py-[13px]"
         style={{ background: "rgba(9,9,15,0.88)", backdropFilter: "blur(14px)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
@@ -126,10 +266,19 @@ export default function MembersPage() {
           </h1>
           <p className="text-[11.5px] text-slate-600 mt-[2px]">
             {isManager
-              ? `${members.length} member${members.length !== 1 ? "s" : ""} · auto-created on first EOD update`
+              ? `${members.length} member${members.length !== 1 ? "s" : ""} · add manually or auto-create on first EOD`
               : "Your sprint summary"}
           </p>
         </div>
+        {isManager && (
+          <button
+            onClick={() => setShowAddMember(true)}
+            className="px-3 py-2 rounded-[9px] text-[12px] font-semibold"
+            style={{ background: "linear-gradient(135deg,#d946ef,#9333ea)", color: "#fff" }}
+          >
+            + Add Member
+          </button>
+        )}
       </div>
 
       <div className="p-[26px]">
@@ -145,7 +294,16 @@ export default function MembersPage() {
           </div>
         ) : members.length === 0 ? (
           <div className="rounded-[12px] px-[18px] py-12 text-center text-[13px] text-slate-600" style={{ background: "#11111b", border: "1px solid rgba(255,255,255,0.07)" }}>
-            No members yet.
+            <p>No members yet.</p>
+            {isManager && (
+              <button
+                onClick={() => setShowAddMember(true)}
+                className="mt-4 px-4 py-2 rounded-[9px] text-[12px] font-semibold"
+                style={{ background: "linear-gradient(135deg,#d946ef,#9333ea)", color: "#fff" }}
+              >
+                + Add your first member
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[13px]">

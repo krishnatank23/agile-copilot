@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { api, type SprintProgress } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -60,15 +60,38 @@ export default function DashboardPage() {
   const [progress, setProgress] = useState<SprintProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const [countdown, setCountdown] = useState(30);
+  const [, startTransition] = useTransition();
 
   const isSuperAdmin = user?.role === "super_admin";
 
-  useEffect(() => {
+  function loadData(silent = false) {
+    if (!silent) setLoading(true);
     api.dashboard
       .sprintProgress()
-      .then(setProgress)
+      .then((data) => {
+        startTransition(() => {
+          setProgress(data);
+          setLastRefreshed(new Date());
+          setError("");
+        });
+      })
       .catch(() => setError("Could not load sprint data — is the backend running?"))
-      .finally(() => setLoading(false));
+      .finally(() => { if (!silent) setLoading(false); });
+  }
+
+  // Initial load
+  useEffect(() => { loadData(); }, []);
+
+  // Auto-poll every 30 seconds
+  useEffect(() => {
+    setCountdown(30);
+    const pollInterval = setInterval(() => loadData(true), 30_000);
+    const tickInterval = setInterval(() => {
+      setCountdown((c) => (c <= 1 ? 30 : c - 1));
+    }, 1000);
+    return () => { clearInterval(pollInterval); clearInterval(tickInterval); };
   }, []);
 
   const totals = progress.reduce(
@@ -122,6 +145,21 @@ export default function DashboardPage() {
             </svg>
             Sprint
           </div>
+          {lastRefreshed && (
+            <span className="text-[11px] text-slate-600">synced {lastRefreshed.toLocaleTimeString()}</span>
+          )}
+          <button
+            id="dashboard-refresh-btn"
+            onClick={() => { loadData(false); setCountdown(30); }}
+            className="flex items-center gap-[5px] px-[11px] py-[5px] rounded-[7px] text-[12px] font-medium transition-all cursor-pointer"
+            style={{ border: "1px solid rgba(99,102,241,0.25)", background: "rgba(99,102,241,0.08)", color: "#818cf8" }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-[13px] h-[13px]">
+              <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+            Refresh <span className="opacity-50 text-[10px]">({countdown}s)</span>
+          </button>
         </div>
       </div>
 

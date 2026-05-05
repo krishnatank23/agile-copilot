@@ -50,29 +50,65 @@ def strip_html(raw: str) -> str:
 def validate_eod(text: str) -> bool:
     """
     Check if the text looks like a valid EOD message.
-    Accepts bullet-point lists OR plain multi-line task lists.
+
+    Accepts:
+      1. Bullet / numbered list with at least 1 item.
+      2. Message that *explicitly* starts with an EOD marker (e.g. "eod:",
+         "EOD", "end of day") AND has at least 1 non-empty content line.
+         This covers the common Teams format:
+             eod: agile-copilot tested - wip
+         or
+             eod:
+             - Completed task1
+             - Completed task2
+      3. Plain multi-line messages with at least 2 non-header content lines.
     """
-    if not text or len(text.strip()) < 10:
+    if not text or len(text.strip()) < 5:
         return False
 
-    # Bullet or numbered list
+    stripped = text.strip()
+    lower = stripped.lower()
+
+    # ── 1. Explicit EOD marker at the START of the message ─────────────────
+    eod_start_patterns = [
+        r"^eod[\s:.-]",      # "eod:", "eod -", "eod." etc.
+        r"^eod$",            # bare "EOD"
+        r"^end[\s-]of[\s-]day",
+        r"^daily[\s-](update|report)",
+        r"^today[\s']*s?[\s-](update|report)",
+        r"^day[\s']*s?[\s-]update",
+    ]
+    has_eod_marker = any(re.match(p, lower) for p in eod_start_patterns)
+
+    if has_eod_marker:
+        # Accept as long as there is at least 1 meaningful content word
+        # (strip the marker line itself and check what's left)
+        first_line, _, rest = stripped.partition("\n")
+        # Inline format: "eod: task1 - status1" → content is on the same line
+        inline_content = re.sub(r"^eod[\s:.-]*", "", first_line, flags=re.IGNORECASE).strip()
+        multi_content = [l.strip() for l in rest.split("\n") if l.strip()]
+        all_content = ([inline_content] if inline_content else []) + multi_content
+        # Need at least 1 content word that's not just punctuation
+        if any(len(re.sub(r"[^a-zA-Z0-9]", "", c)) >= 2 for c in all_content):
+            return True
+
+    # ── 2. Bullet or numbered list (≥ 1 item) ──────────────────────────────
     bullet_pattern = re.compile(r"^\s*[-•*]\s*(.+)", re.MULTILINE)
     numbered_pattern = re.compile(r"^\s*\d+[.)]\s*(.+)", re.MULTILINE)
-
     bullets = bullet_pattern.findall(text)
     numbered = numbered_pattern.findall(text)
-
     if len(bullets) + len(numbered) >= 1:
         return True
 
-    # Plain multi-line: at least 2 non-empty content lines (excluding header/greeting)
-    lines = [l.strip() for l in text.strip().split("\n") if l.strip()]
+    # ── 3. Plain multi-line: ≥ 2 non-header content lines ──────────────────
+    lines = [l.strip() for l in stripped.split("\n") if l.strip()]
     content_lines = [
         l for l in lines
         if not re.match(r"^(mon|tue|wed|thu|fri|sat|sun)", l, re.IGNORECASE)
         and "eod" not in l.lower()
     ]
     return len(content_lines) >= 2
+
 
 
 def extract_metadata(payload: dict) -> dict:
@@ -135,8 +171,31 @@ def extract_metadata(payload: dict) -> dict:
 def is_eod_message(text: str) -> bool:
     """
     Check if a message is an EOD update.
-    Only triggers on the 'eod' keyword (case-insensitive).
+    Triggers on:
+      - 'eod' keyword (case-insensitive)
+      - 'end of day' / 'end-of-day'
+      - 'today's update' / 'daily update' / 'daily report' / 'day update'
+      - Any message with 2+ bullet/numbered task lines (plain task list)
     """
     if not text:
         return False
-    return "eod" in text.lower()
+    lower = text.lower()
+
+    # Explicit EOD markers
+    eod_phrases = [
+        "eod", "end of day", "end-of-day", "today's update",
+        "today update", "daily update", "daily report", "day update",
+        "day's update",
+    ]
+    if any(phrase in lower for phrase in eod_phrases):
+        return True
+
+    # Plain task list: 2+ bullet or numbered lines → treat as EOD
+    bullet_pattern = re.compile(r"^\s*[-•*]\s*\S", re.MULTILINE)
+    numbered_pattern = re.compile(r"^\s*\d+[.)]\s*\S", re.MULTILINE)
+    bullet_count = len(bullet_pattern.findall(text))
+    numbered_count = len(numbered_pattern.findall(text))
+    if bullet_count + numbered_count >= 2:
+        return True
+
+    return False

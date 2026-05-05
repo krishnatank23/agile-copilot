@@ -12,13 +12,18 @@ Endpoints:
   POST /api/subscribe          — create/renew Graph API subscription
   POST /api/notify-wip         — send WIP task summary to Teams/Slack
   POST /api/eod-reminder       — send EOD reminder
+    logger.info(
+        "Graph webhook received: keys=%s notification_count=%d",
+        list(body.keys()),
+        len(notifications),
+    )
   POST /api/morning-summary    — send AI-prioritized morning summary
   GET  /api/login              — start delegated Teams auth
   GET  /api/auth-callback      — OAuth callback
   GET  /api/tasks              — list tasks (web UI)
   PATCH /api/tasks/{id}        — update task (web UI)
-  GET  /api/members            — list members (web UI)
-  GET  /api/dashboard/*        — dashboard aggregates (web UI)
+            logger.warning("Unknown clientState '%s' — defaulting to workspace 1", client_state)
+            workspace_id = 1
   GET  /health                 — health check
 """
 
@@ -36,7 +41,7 @@ from fastapi.responses import RedirectResponse, HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings, get_sprint_end_date, GRAPH_BASE_URL
+from app.config import settings, get_sprint_end_date, GRAPH_BASE_URL, build_graph_notification_url
 from app.teams_capture import extract_metadata, is_eod_message, validate_eod
 from app.ai_parser import parse_eod
 from app.validator import validate_all
@@ -86,7 +91,34 @@ async def _seed_manager(db) -> None:
     elif user.role == "manager":
         user.role = "super_admin"
         await db.commit()
-        logger.info("Upgraded legacy manager account to super_admin")
+
+
+async def _webhook_endpoint_reachable() -> bool:
+    """Return True when configured Graph webhook endpoint passes a Graph-style validation check."""
+    notification_url = build_graph_notification_url(settings.WEBHOOK_NOTIFICATION_URL)
+    if not notification_url:
+        logger.info("Skipping Teams subscription startup: WEBHOOK_NOTIFICATION_URL is not configured")
+        return False
+
+    try:
+        probe_url = f"{notification_url}?validationToken=probe"
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(probe_url)
+        if resp.status_code == 200 and resp.text == "probe":
+            return True
+        logger.warning(
+            "Skipping Teams subscription startup: webhook validation failed with %s at %s",
+            resp.status_code,
+            probe_url,
+        )
+        return False
+    except Exception as e:
+        logger.warning(
+            "Skipping Teams subscription startup: webhook endpoint unreachable at %s (%s)",
+            notification_url,
+            e,
+        )
+        return False
 
 
 @asynccontextmanager
@@ -100,18 +132,22 @@ async def lifespan(app: FastAPI):
         await crud.ensure_default_workspace(db)
         await _seed_manager(db)
 
-    # Delayed Teams subscription (Teams only — skip if not configured)
-    if settings.AZURE_CLIENT_ID and settings.CHAT_ID:
+    # Delayed Teams subscription (skip until required config + reachable webhook are present)
+    if settings.AZURE_CLIENT_ID and settings.AGILE_CHAT_ID:
         async def _delayed_subscribe():
             await asyncio.sleep(5)
             try:
+                if not await _webhook_endpoint_reachable():
+                    return
                 await subscription_manager.ensure_active()
                 logger.info("Teams subscription active on startup")
+                subscription_manager.start_auto_renewal()
             except Exception as e:
                 logger.warning("Could not create Teams subscription: %s", e)
 
         asyncio.create_task(_delayed_subscribe())
-        subscription_manager.start_auto_renewal()
+    else:
+        logger.info("Skipping Teams subscription startup: AZURE_CLIENT_ID or AGILE_CHAT_ID missing")
 
     scheduler.start(
         eod_callback=_send_eod_reminder,
@@ -123,13 +159,13 @@ async def lifespan(app: FastAPI):
     yield
 
     scheduler.stop()
-    if settings.AZURE_CLIENT_ID and settings.CHAT_ID:
+    if settings.AZURE_CLIENT_ID and settings.AGILE_CHAT_ID:
         subscription_manager.stop_auto_renewal()
-        if subscription_manager.is_active:
-            try:
-                await subscription_manager.delete_subscription()
-            except Exception as e:
-                logger.warning("Failed to delete Teams subscription: %s", e)
+        # NOTE: Do not delete the subscription on shutdown. Keeping the
+        # subscription alive prevents hitting Graph's "one subscription per
+        # resource per app" limit when FastAPI restarts frequently during
+        # development with --reload. The subscription will be reused or
+        # renewed on next startup.
 
     logger.info("Agile Copilot shutting down")
 
@@ -408,6 +444,122 @@ async def health_check():
     }
 
 
+@app.get("/api/webhook-debug")
+async def webhook_debug():
+    """
+    Returns diagnostic info about the Teams webhook pipeline.
+    Helps identify why messages from Teams are not appearing in the UI.
+    """
+    from app.config import build_graph_notification_url
+
+    notification_url = build_graph_notification_url(settings.WEBHOOK_NOTIFICATION_URL)
+
+    # Check if webhook URL is reachable
+    webhook_reachable = False
+    webhook_error = ""
+    if notification_url:
+        try:
+            probe_url = f"{notification_url}?validationToken=probe"
+            async with httpx.AsyncClient(timeout=5) as client:
+                resp = await client.get(probe_url)
+            webhook_reachable = (resp.status_code == 200 and resp.text == "probe")
+            if not webhook_reachable:
+                webhook_error = f"HTTP {resp.status_code} (expected 200 + 'probe' body)"
+        except Exception as e:
+            webhook_error = str(e)
+
+    # List active Graph subscriptions
+    subs = []
+    sub_error = ""
+    if settings.AZURE_CLIENT_ID and settings.AZURE_TENANT_ID:
+        try:
+            subs = await subscription_manager.list_subscriptions()
+        except Exception as e:
+            sub_error = str(e)
+
+    return {
+        "config": {
+            "agile_chat_id": settings.AGILE_CHAT_ID or "(not set)",
+            "webhook_url": notification_url or "(not set)",
+            "azure_client_id": settings.AZURE_CLIENT_ID[:8] + "..." if settings.AZURE_CLIENT_ID else "(not set)",
+        },
+        "subscription": {
+            "active": subscription_manager.is_active,
+            "id": subscription_manager._subscription_id,
+            "expires_at": subscription_manager._expires_at.isoformat() if subscription_manager._expires_at else None,
+            "error": sub_error,
+        },
+        "webhook_reachable": webhook_reachable,
+        "webhook_error": webhook_error,
+        "graph_subscriptions": [
+            {
+                "id": s.get("id"),
+                "resource": s.get("resource"),
+                "expirationDateTime": s.get("expirationDateTime"),
+                "notificationUrl": s.get("notificationUrl"),
+            }
+            for s in subs
+        ],
+        "processed_messages_in_cache": len(_processed_messages),
+        "diagnosis": _diagnose_webhook(
+            notification_url, webhook_reachable, webhook_error,
+            settings.AGILE_CHAT_ID, subs, sub_error
+        ),
+    }
+
+
+def _diagnose_webhook(
+    notification_url: str,
+    reachable: bool,
+    webhook_error: str,
+    chat_id: str,
+    subs: list,
+    sub_error: str,
+) -> list[str]:
+    """Return a list of human-readable diagnosis strings."""
+    issues = []
+    if not chat_id:
+        issues.append("❌ AGILE_CHAT_ID is not set in .env — Teams messages cannot be monitored.")
+    if not notification_url:
+        issues.append("❌ WEBHOOK_NOTIFICATION_URL is not set in .env — Graph API cannot send notifications.")
+    elif not reachable:
+        issues.append(
+            f"❌ Webhook URL is NOT reachable: {webhook_error}. "
+            "Your ngrok tunnel may have expired. Restart ngrok and update WEBHOOK_NOTIFICATION_URL in .env."
+        )
+    else:
+        issues.append("✅ Webhook URL is reachable (ngrok tunnel is live).")
+
+    if sub_error:
+        issues.append(f"❌ Could not list Graph subscriptions: {sub_error}")
+    elif not subs:
+        issues.append(
+            "❌ No active Graph subscriptions found. "
+            "Run POST /api/subscribe to create one, or check Azure app permissions."
+        )
+    else:
+        matching = [s for s in subs if chat_id and chat_id in s.get("resource", "")]
+        if not matching:
+            issues.append(
+                f"⚠️ No subscription found for chat ID '{chat_id}'. "
+                f"Found {len(subs)} subscription(s) for other resources."
+            )
+        else:
+            issues.append(
+                f"✅ Active subscription found for your chat ({matching[0].get('id')})."
+            )
+
+    if not issues or all(i.startswith("✅") for i in issues):
+        issues.append(
+            "✅ Configuration looks correct. If messages still don't appear, "
+            "check that you are messaging in the correct Teams chat (matching AGILE_CHAT_ID) "
+            "and that your EOD message contains 'eod' or starts with a task list."
+        )
+    return issues
+
+
+
+
 # ──────────────────────────────────────────────
 # Direct EOD webhook (Power Automate / manual)
 # ──────────────────────────────────────────────
@@ -450,12 +602,14 @@ def _workspace_id_from_client_state(client_state: str) -> int | None:
     """
     if client_state == "agile-copilot-secret":
         return 1
+    if not client_state:
+        return 1
     if client_state.startswith("agile-copilot-"):
         try:
             return int(client_state.split("-")[-1])
         except ValueError:
             pass
-    return None
+    return 1
 
 
 @app.post("/api/graph-webhook")
@@ -466,13 +620,18 @@ async def graph_webhook_notification(request: Request):
 
     body = await request.json()
     notifications = body.get("value", [])
+    logger.info(
+        "Graph webhook received: keys=%s notification_count=%d",
+        list(body.keys()),
+        len(notifications),
+    )
 
     for notification in notifications:
         client_state = notification.get("clientState", "")
         workspace_id = _workspace_id_from_client_state(client_state)
         if workspace_id is None:
-            logger.warning("Unknown clientState '%s' — skipping notification", client_state)
-            continue
+            logger.warning("Unknown clientState '%s' — defaulting to workspace 1", client_state)
+            workspace_id = 1
 
         resource = notification.get("resource", "")
 

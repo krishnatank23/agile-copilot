@@ -301,4 +301,4 @@ async def parse_eod(eod_text: str, context: dict) -> list[dict]:
 
     # Step 3: Local regex fallback
     logger.info("AI unavailable — falling back to local parser")
-    return await parse_eod_local(eod_text, context)
+    return parse_eod_local(eod_text, context)
