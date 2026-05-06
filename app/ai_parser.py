@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 PROMPT_PATH = Path(__file__).parent / "prompts" / "system_prompt.txt"
 SYSTEM_PROMPT_TEMPLATE = PROMPT_PATH.read_text(encoding="utf-8") if PROMPT_PATH.exists() else ""
 
+BACKLOG_PROMPT_PATH = Path(__file__).parent / "prompts" / "backlog_prompt.txt"
+BACKLOG_PROMPT_TEMPLATE = BACKLOG_PROMPT_PATH.read_text(encoding="utf-8") if BACKLOG_PROMPT_PATH.exists() else ""
+
 # Task schema for Gemini's structured output (JSON mode)
 TASK_SCHEMA = {
     "type": "array",
@@ -302,3 +305,81 @@ async def parse_eod(eod_text: str, context: dict) -> list[dict]:
     # Step 3: Local regex fallback
     logger.info("AI unavailable — falling back to local parser")
     return parse_eod_local(eod_text, context)
+
+
+async def parse_backlog(text: str) -> list[str]:
+    """
+    Parse backlog items from conversational text using AI (Gemini/Groq).
+    """
+    if not text:
+        return []
+
+    # Basic regex fallback if AI fails (handle /backlog Task A, Task B)
+    def _local_backlog(t: str) -> list[str]:
+        import re
+        body = re.sub(r"^/backlog\s*", "", t, flags=re.IGNORECASE).strip()
+        body = re.sub(r"^backlog:\s*", "", body, flags=re.IGNORECASE).strip()
+        lines = [l.strip().lstrip("-•*1234567890.)").strip() for l in body.splitlines()]
+        items = [l for l in lines if l]
+        if not items and body:
+            items = [body]
+        return items
+
+    prompt = BACKLOG_PROMPT_TEMPLATE.replace("{{MESSAGE}}", text)
+
+    # 1. Gemini
+    if settings.GEMINI_API_KEY:
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={settings.GEMINI_API_KEY}"
+            async with httpx.AsyncClient(timeout=20) as client:
+                resp = await client.post(
+                    url,
+                    json={
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "generationConfig": {"responseMimeType": "application/json"},
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                candidates = data.get("candidates", [])
+                if candidates:
+                    result_text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "[]")
+                    items = json.loads(result_text)
+                    if isinstance(items, list):
+                        logger.info("Gemini parsed %d backlog items", len(items))
+                        return items
+        except Exception as e:
+            logger.warning("Gemini backlog parse failed: %s", e)
+
+    # 2. Groq
+    if settings.GROQ_API_KEY:
+        try:
+            async with httpx.AsyncClient(timeout=20) as client:
+                resp = await client.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {settings.GROQ_API_KEY}"},
+                    json={
+                        "model": "llama-3.3-70b-versatile",
+                        "messages": [{"role": "user", "content": prompt}],
+                        "response_format": {"type": "json_object"},
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                content = data["choices"][0]["message"]["content"]
+                parsed = json.loads(content)
+                if isinstance(parsed, dict):
+                    items = parsed.get("items", parsed.get("backlog", parsed.get("tasks", [])))
+                elif isinstance(parsed, list):
+                    items = parsed
+                else:
+                    items = []
+
+                if isinstance(items, list) and items:
+                    logger.info("Groq parsed %d backlog items", len(items))
+                    return items
+        except Exception as e:
+            logger.warning("Groq backlog parse failed: %s", e)
+
+    # 3. Local fallback
+    return _local_backlog(text)

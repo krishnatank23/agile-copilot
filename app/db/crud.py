@@ -523,18 +523,52 @@ async def promote_backlog_item(
 # ──────────────────────────────────────────────
 
 
+async def get_backlog_items(db: AsyncSession, member_id: int) -> list[dict]:
+    """Return active backlog items for a member."""
+    result = await db.execute(
+        select(BacklogItem)
+        .where(BacklogItem.member_id == member_id, BacklogItem.promoted == False)
+        .order_by(BacklogItem.created_at.desc())
+    )
+    items = result.scalars().all()
+    return [
+        {
+            "id": item.id,
+            "title": item.text,
+            "created_at": item.created_at.isoformat() if item.created_at else None,
+            "status": item.status or "Pending",
+            "priority": item.priority or "Medium",
+            "story_points": item.story_points or 2,
+            "dependency": item.dependency or "",
+            "member_id": item.member_id,
+        }
+        for item in items
+    ]
+
+
 async def add_backlog_items(
     db: AsyncSession,
     member_id: int,
-    items: list[str],
+    items: list[str] | list[dict],
 ) -> int:
     """Append items to the member's backlog. Returns count written."""
     written = 0
-    for text in items:
-        text = text.strip()
-        if not text:
-            continue
-        db.add(BacklogItem(member_id=member_id, text=text))
+    for item in items:
+        if isinstance(item, str):
+            text = item.strip()
+            if not text: continue
+            db.add(BacklogItem(member_id=member_id, text=text))
+        else:
+            text = item.get("title", "").strip()
+            if not text: continue
+            db.add(BacklogItem(
+                member_id=member_id,
+                text=text,
+                priority=item.get("priority", "Medium"),
+                story_points=item.get("story_points", 2),
+                status=item.get("status", "Pending"),
+                dependency=item.get("dependency"),
+            ))
         written += 1
     await db.commit()
     logger.info("Added %d backlog items for member %d", written, member_id)
@@ -557,6 +591,7 @@ async def update_task(db: AsyncSession, task_id: int, fields: dict) -> dict | No
         return None
 
     values["updated_at"] = datetime.utcnow()
+    logger.info(f"Updating task {task_id} in DB with values: {values}")
     await db.execute(update(Task).where(Task.id == task_id).values(**values))
     await db.commit()
 

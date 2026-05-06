@@ -13,7 +13,7 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!loading && user) router.replace("/");
+    if (!loading && user) router.replace("/dashboard");
   }, [user, loading, router]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -22,7 +22,7 @@ export default function LoginPage() {
     setError("");
     try {
       await login(username, password);
-      router.replace("/");
+      router.replace("/dashboard");
     } catch {
       setError("Incorrect username or password.");
     } finally {

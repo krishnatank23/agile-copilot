@@ -42,8 +42,8 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings, get_sprint_end_date, GRAPH_BASE_URL, build_graph_notification_url
-from app.teams_capture import extract_metadata, is_eod_message, validate_eod
-from app.ai_parser import parse_eod
+from app.teams_capture import extract_metadata, is_eod_message, is_backlog_message, validate_eod
+from app.ai_parser import parse_eod, parse_backlog
 from app.validator import validate_all
 from app.task_router import route_tasks
 from app.subscription_manager import subscription_manager
@@ -264,18 +264,15 @@ async def _send_agile_message(content: str, workspace_id: int = 1) -> None:
 
 
 async def _process_backlog_command(sender: str, message: str, db: AsyncSession) -> None:
-    """Handle /backlog command — append items to the member's backlog in the DB."""
-    body = message[len("/backlog"):].strip()
-    lines = [l.strip().lstrip("-•*1234567890.)").strip() for l in body.splitlines()]
-    items = [l for l in lines if l]
-    if not items and body:
-        items = [body]
+    """Handle backlog message — extract items via AI and append to DB."""
+    items = await parse_backlog(message)
     if not items:
+        logger.info("No backlog items found in message from '%s'", sender)
         return
 
     member = await crud.get_or_create_member(db, sender)
     if not member:
-        logger.warning("/backlog: no member found for '%s'", sender)
+        logger.warning("backlog: no member found for '%s'", sender)
         return
 
     written = await crud.add_backlog_items(db, member.id, items)
@@ -666,23 +663,25 @@ async def graph_webhook_notification(request: Request):
         clean = metadata["clean_message"].strip()
         sender = metadata["sender"]
 
+        processed = False
         async with AsyncSessionLocal() as db:
-            if clean.lower().startswith("/backlog"):
+            if is_backlog_message(clean):
                 await _process_backlog_command(sender, clean, db)
-                continue
+                processed = True
 
-            if not is_eod_message(clean):
-                logger.info("Not an EOD from '%s' — skipping", sender)
-                continue
-            if not validate_eod(clean):
-                logger.info("No valid tasks in message from '%s' — skipping", sender)
-                continue
+            if is_eod_message(clean):
+                if validate_eod(clean):
+                    result = await _process_eod(sender, clean, metadata["timestamp"], db, workspace_id=workspace_id)
+                    logger.info(
+                        "EOD processed: ws=%d member=%s parsed=%d appended=%d updated=%d",
+                        workspace_id, result.member, result.tasks_parsed, result.tasks_appended, result.tasks_updated,
+                    )
+                    processed = True
+                else:
+                    logger.info("Message looks like EOD but has no valid tasks: '%s'", sender)
 
-            result = await _process_eod(sender, clean, metadata["timestamp"], db, workspace_id=workspace_id)
-            logger.info(
-                "EOD processed: ws=%d member=%s parsed=%d appended=%d updated=%d",
-                workspace_id, result.member, result.tasks_parsed, result.tasks_appended, result.tasks_updated,
-            )
+            if not processed:
+                logger.info("Message from '%s' is neither EOD nor backlog — skipping", sender)
 
     return Response(status_code=202)
 

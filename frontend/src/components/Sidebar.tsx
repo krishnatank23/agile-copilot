@@ -8,7 +8,7 @@ const NAV_SUPER_ADMIN = [
   {
     label: "Overview",
     items: [
-      { href: "/", label: "All Teams", icon: <DashIcon /> },
+      { href: "/dashboard", label: "All Teams", icon: <DashIcon /> },
       { href: "/tasks", label: "All Tasks", icon: <TasksIcon /> },
       { href: "/members", label: "All Members", icon: <MembersIcon /> },
     ],
@@ -26,7 +26,7 @@ const NAV_MANAGER = [
   {
     label: "Menu",
     items: [
-      { href: "/", label: "Dashboard", icon: <DashIcon /> },
+      { href: "/dashboard", label: "Dashboard", icon: <DashIcon /> },
       { href: "/tasks", label: "Tasks", icon: <TasksIcon /> },
       { href: "/members", label: "Members", icon: <MembersIcon /> },
       { href: "/backlog", label: "Team Backlog", icon: <BacklogIcon /> },
@@ -44,7 +44,7 @@ const NAV_MEMBER = [
   {
     label: "Menu",
     items: [
-      { href: "/", label: "My Dashboard", icon: <DashIcon /> },
+      { href: "/dashboard", label: "My Dashboard", icon: <DashIcon /> },
       { href: "/tasks", label: "My Tasks", icon: <TasksIcon /> },
       { href: "/backlog", label: "My Backlog", icon: <BacklogIcon /> },
     ],

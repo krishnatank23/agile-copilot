@@ -243,9 +243,9 @@ function EditUserModal({
 
 function RoleBadge({ role }: { role: string }) {
   const styles: Record<string, { bg: string; color: string; label: string }> = {
-    super_admin: { bg: "rgba(245,158,11,0.1)",   color: "#d97706", label: "Super Admin" },
-    manager:     { bg: "rgba(139,92,246,0.1)",   color: "#7c3aed", label: "Manager" },
-    member:      { bg: "rgba(59,130,246,0.1)",   color: "#2563eb", label: "Member" },
+    super_admin: { bg: "rgba(245,158,11,0.1)", color: "#d97706", label: "Super Admin" },
+    manager: { bg: "rgba(139,92,246,0.1)", color: "#7c3aed", label: "Manager" },
+    member: { bg: "rgba(59,130,246,0.1)", color: "#2563eb", label: "Member" },
   };
   const s = styles[role] ?? { bg: "rgba(0,0,0,0.06)", color: "#6b7280", label: role };
   return (
@@ -435,8 +435,8 @@ function UserRow({ user, workspaceName, onEdit }: { user: UserRecord; workspaceN
   const initials = user.username.slice(0, 2).toUpperCase();
   const avatarColor =
     user.role === "super_admin" ? "linear-gradient(135deg,#f59e0b,#d97706)" :
-    user.role === "manager"     ? "linear-gradient(135deg,#d946ef,#9333ea)" :
-    "linear-gradient(135deg,#3b82f6,#6366f1)";
+      user.role === "manager" ? "linear-gradient(135deg,#d946ef,#9333ea)" :
+        "linear-gradient(135deg,#3b82f6,#6366f1)";
 
   return (
     <div

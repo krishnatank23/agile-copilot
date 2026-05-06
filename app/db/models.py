@@ -125,6 +125,12 @@ class BacklogItem(Base):
     member_id = Column(Integer, ForeignKey("members.id"), nullable=False)
     text = Column(String, nullable=False)
     promoted = Column(Boolean, default=False)
+    
+    priority = Column(String, default="Medium")
+    story_points = Column(Integer, default=2)
+    status = Column(String, default="Pending")
+    dependency = Column(String, nullable=True)
+    
     created_at = Column(DateTime, default=datetime.utcnow)
 
     member = relationship("Member", back_populates="backlog_items")

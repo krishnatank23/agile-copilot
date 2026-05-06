@@ -1,0 +1,13 @@
+Your task is to extract a list of backlog items from a user's message.
+A backlog item is a task or project they want to work on in the future.
+Ignore greetings, conversational fluff, and status updates (like WIP, done).
+Just extract the names of the tasks.
+
+Return ONLY a JSON array of strings.
+Example message:
+"Hey! please add 'Wogom website update' and 'Schneider PPT' to my backlog. thanks!"
+Example output:
+["Wogom website update", "Schneider PPT"]
+
+Message:
+{{MESSAGE}}

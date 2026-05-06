@@ -1,374 +1,287 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { api, type SprintProgress } from "@/lib/api";
+import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
-const MEMBER_COLORS: Record<string, string> = {
-  Dhwani: "#d946ef", Shaily: "#8b5cf6", Shriya: "#3b82f6",
-  Ravi: "#10b981", Yash: "#f59e0b", Yogini: "#ec4899",
-  Kriishna: "#06b6d4", Harshil: "#f97316", Rinal: "#14b8a6", Prince: "#6366f1",
-};
+export default function LandingPage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState(0);
 
-function initials(name: string) {
-  return name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
-}
-
-function memberColor(name: string) {
-  return MEMBER_COLORS[name] ?? "#64748b";
-}
-
-interface MetricCardProps {
-  label: string;
-  value: string | number;
-  sub: string;
-  trend?: "up" | "down" | "neutral";
-  color: "green" | "purple" | "amber" | "blue";
-  icon: React.ReactNode;
-}
-
-function MetricCard({ label, value, sub, trend = "neutral", color, icon }: MetricCardProps) {
-  const palette = {
-    green:  { ico: "rgba(16,185,129,.12)",  txt: "#10b981", glow: "#10b981" },
-    purple: { ico: "rgba(217,70,239,.12)",  txt: "#d946ef", glow: "#d946ef" },
-    amber:  { ico: "rgba(245,158,11,.12)",  txt: "#f59e0b", glow: "#f59e0b" },
-    blue:   { ico: "rgba(59,130,246,.12)",  txt: "#3b82f6", glow: "#3b82f6" },
-  }[color];
-
-  const trendColor = trend === "up" ? "#10b981" : trend === "down" ? "#ef4444" : "#6b7280";
-
-  return (
-    <div
-      className="relative overflow-hidden rounded-[12px] cursor-default transition-transform hover:-translate-y-px"
-      style={{ background: "#ffffff", border: "1px solid rgba(0,0,0,0.07)", padding: "18px 20px" }}
-    >
-      <div className="absolute -bottom-5 -right-5 w-20 h-20 rounded-full opacity-[0.09]" style={{ background: palette.glow }} />
-      <div className="flex items-start justify-between mb-[11px]">
-        <span className="text-[11px] font-medium uppercase tracking-[0.5px] text-gray-600">{label}</span>
-        <div className="flex items-center justify-center w-[30px] h-[30px] rounded-[8px]" style={{ background: palette.ico, color: palette.txt }}>
-          {icon}
-        </div>
-      </div>
-      <div className="text-[30px] font-extrabold text-gray-900 leading-none tracking-[-1px] mb-[6px]">{value}</div>
-      <div className="text-[11.5px]" style={{ color: trendColor }}>{sub}</div>
-    </div>
-  );
-}
-
-export default function DashboardPage() {
-  const { user } = useAuth();
-  const [progress, setProgress] = useState<SprintProgress[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
-  const [countdown, setCountdown] = useState(30);
-  const [, startTransition] = useTransition();
-
-  const isSuperAdmin = user?.role === "super_admin";
-
-  function loadData(silent = false) {
-    if (!silent) setLoading(true);
-    api.dashboard
-      .sprintProgress()
-      .then((data) => {
-        startTransition(() => {
-          setProgress(data);
-          setLastRefreshed(new Date());
-          setError("");
-        });
-      })
-      .catch(() => setError("Could not load sprint data — is the backend running?"))
-      .finally(() => { if (!silent) setLoading(false); });
-  }
-
-  // Initial load
-  useEffect(() => { loadData(); }, []);
-
-  // Auto-poll every 30 seconds
   useEffect(() => {
-    setCountdown(30);
-    const pollInterval = setInterval(() => loadData(true), 30_000);
-    const tickInterval = setInterval(() => {
-      setCountdown((c) => (c <= 1 ? 30 : c - 1));
-    }, 1000);
-    return () => { clearInterval(pollInterval); clearInterval(tickInterval); };
-  }, []);
+    if (!loading && user) {
+      router.replace("/dashboard");
+    }
+  }, [user, loading, router]);
 
-  const totals = progress.reduce(
-    (acc, p) => ({
-      tasks: acc.tasks + p.total_tasks,
-      wip: acc.wip + p.wip,
-      closed: acc.closed + p.closed,
-      approval: acc.approval + p.sent_for_approval,
-      expected: acc.expected + p.expected_sp,
-      actual: acc.actual + p.actual_sp,
-    }),
-    { tasks: 0, wip: 0, closed: 0, approval: 0, expected: 0, actual: 0 }
-  );
-  const teamPct = totals.expected > 0 ? Math.round((totals.actual / totals.expected) * 100) : 0;
-  const activeMembers = progress.filter((p) => p.total_tasks > 0).length;
-
-  // Group by workspace for super_admin view
-  const workspaces = isSuperAdmin
-    ? Array.from(new Map(progress.map((p) => [p.workspace_id, p.workspace_name])))
-    : [];
-
-  const tableHeaders = isSuperAdmin
-    ? ["Member", "Team", "WIP", "In Review", "Closed", "Total", "Exp SP", "Act SP", "Blocked by", "Progress"]
-    : ["Member", "WIP", "In Review", "Closed", "Total", "Exp SP", "Act SP", "Blocked by", "Progress"];
+  const features = [
+    {
+      title: "Natural Language Processing",
+      desc: "Our AI doesn't just read text; it understands context. It identifies mentions, estimates effort, and detects roadblocks automatically from your daily updates.",
+      icon: "🧠"
+    },
+    {
+      title: "Bi-Directional Sync",
+      desc: "Changes in the dashboard reflect back to your team. Mention a user in a comment, and they'll receive a notification directly in their Teams chat.",
+      icon: "🔄"
+    },
+    {
+      title: "Predictive Analytics",
+      desc: "Agile Copilot analyzes your team's historical velocity to predict sprint completion dates and warn you about potential delays before they happen.",
+      icon: "📈"
+    }
+  ];
 
   return (
-    <>
-      {/* Topbar */}
-      <div
-        className="sticky top-0 z-10 flex items-center justify-between px-[26px] py-[13px]"
-        style={{ background: "rgba(255,255,255,0.95)", backdropFilter: "blur(14px)", borderBottom: "1px solid rgba(0,0,0,0.07)" }}
-      >
-        <div>
-          <h1 className="text-[19px] font-bold text-gray-900 tracking-[-0.5px]">
-            {isSuperAdmin ? "Org Overview" : "Dashboard"}
-          </h1>
-          <p className="text-[11.5px] text-gray-600 mt-[2px]">
-            {isSuperAdmin
-              ? `${workspaces.length} team${workspaces.length !== 1 ? "s" : ""} · ${activeMembers} active members`
-              : `${activeMembers} member${activeMembers !== 1 ? "s" : ""} active this sprint`}
-          </p>
-        </div>
-        <div className="flex items-center gap-[9px]">
-          <div
-            className="flex items-center gap-[5px] px-[11px] py-[5px] rounded-[7px] text-[12px] font-medium cursor-default"
-            style={{ border: "1px solid rgba(139,92,246,0.2)", background: "rgba(139,92,246,0.08)", color: "#7c3aed" }}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-[13px] h-[13px]">
-              <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
-              <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-            </svg>
-            Sprint
-          </div>
-          {lastRefreshed && (
-            <span className="text-[11px] text-gray-600">synced {lastRefreshed.toLocaleTimeString()}</span>
-          )}
-          <button
-            id="dashboard-refresh-btn"
-            onClick={() => { loadData(false); setCountdown(30); }}
-            className="flex items-center gap-[5px] px-[11px] py-[5px] rounded-[7px] text-[12px] font-medium transition-all cursor-pointer"
-            style={{ border: "1px solid rgba(99,102,241,0.25)", background: "rgba(99,102,241,0.08)", color: "#4f46e5" }}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-[13px] h-[13px]">
-              <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-            </svg>
-            Refresh <span className="opacity-50 text-[10px]">({countdown}s)</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="p-[26px] flex flex-col gap-[22px]">
-
-        {error && (
-          <div className="rounded-[10px] px-4 py-3 text-sm" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#dc2626" }}>
-            {error}
-          </div>
-        )}
-
-        {/* Metric cards */}
-        {!loading && !error && (
-          <div className="grid grid-cols-2 xl:grid-cols-4 gap-[13px]">
-            <MetricCard
-              label="Completed Tasks"
-              value={totals.closed}
-              sub={`${totals.tasks} total tasks this sprint`}
-              trend="up"
-              color="green"
-              icon={
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-[14px] h-[14px]">
-                  <polyline points="20 6 9 17 4 12"/>
-                </svg>
-              }
-            />
-            <MetricCard
-              label="Completion Rate"
-              value={`${teamPct}%`}
-              sub={`${totals.actual} / ${totals.expected} story points`}
-              trend={teamPct >= 60 ? "up" : "down"}
-              color="purple"
-              icon={
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-[14px] h-[14px]">
-                  <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-                </svg>
-              }
-            />
-            <MetricCard
-              label="Pending Approvals"
-              value={totals.approval}
-              sub={totals.approval > 0 ? "Need review" : "All clear"}
-              trend={totals.approval > 0 ? "down" : "neutral"}
-              color="amber"
-              icon={
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-[14px] h-[14px]">
-                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                </svg>
-              }
-            />
-            <MetricCard
-              label={isSuperAdmin ? "Teams / Members" : "Team Overview"}
-              value={isSuperAdmin ? `${workspaces.length} / ${progress.length}` : `${activeMembers} / ${progress.length}`}
-              sub={isSuperAdmin ? `${activeMembers} active members` : `${totals.wip} tasks in progress`}
-              trend="neutral"
-              color="blue"
-              icon={
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-[14px] h-[14px]">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                  <circle cx="9" cy="7" r="4"/>
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                </svg>
-              }
-            />
-          </div>
-        )}
-
-        {/* Sprint progress table */}
-        <div className="rounded-[12px] overflow-hidden" style={{ background: "#ffffff", border: "1px solid rgba(0,0,0,0.07)" }}>
-          <div className="flex items-center justify-between px-[18px] py-[15px]" style={{ borderBottom: "1px solid rgba(0,0,0,0.07)" }}>
-            <div>
-              <h2 className="text-[14px] font-semibold text-gray-900">Sprint Progress</h2>
-              <p className="text-[11.5px] text-gray-600 mt-[2px]">
-                {isSuperAdmin ? "All teams · per-member breakdown" : "Per-member breakdown"}
-              </p>
+    <div className="min-h-screen bg-white font-sans text-gray-900 antialiased selection:bg-purple-100 selection:text-purple-900">
+      {/* Ultra-Slim Navbar */}
+      <nav className="fixed top-0 w-full z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
+        <div className="max-w-6xl mx-auto px-6 h-12 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md bg-gradient-to-br from-fuchsia-500 to-purple-600 flex items-center justify-center shadow-sm">
+              <span className="text-[10px]">⚡</span>
             </div>
+            <span className="text-[14px] font-bold tracking-tight">Agile Copilot</span>
           </div>
 
-          <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 380px)" }}>
-            {loading ? (
-              <div className="px-[18px] py-10 text-center text-[13px] text-gray-500">Loading…</div>
-            ) : progress.length === 0 && !error ? (
-              <div className="px-[18px] py-12 text-center text-[13px] text-gray-500">
-                No sprint data yet. Members will appear once they post EOD updates.
-              </div>
-            ) : (
-              <table className="w-full border-collapse text-[12.5px]">
-                <thead className="sticky top-0 z-10">
-                  <tr>
-                    {tableHeaders.map((h) => (
-                      <th
-                        key={h}
-                        className="px-[13px] py-[9px] text-left text-[10px] font-semibold uppercase tracking-[0.6px] whitespace-nowrap"
-                        style={{ color: "#6b7280", background: "#ffffff", borderBottom: "1px solid rgba(0,0,0,0.07)" }}
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {progress.map((p) => {
-                    const pct = p.expected_sp > 0 ? Math.round((p.actual_sp / p.expected_sp) * 100) : 0;
-                    const color = memberColor(p.member);
-                    return (
-                      <tr
-                        key={p.member_id}
-                        className="transition-colors"
-                        style={{ borderBottom: "1px solid rgba(0,0,0,0.032)" }}
-                        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.025)")}
-                        onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}
-                      >
-                        <td className="px-[13px] py-[11px] whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="flex-shrink-0 flex items-center justify-center rounded-full text-[9px] font-bold text-white"
-                              style={{ width: 24, height: 24, background: color }}
-                            >
-                              {initials(p.member)}
-                            </div>
-                            <span className="font-medium text-gray-900">{p.member}</span>
-                          </div>
-                        </td>
-                        {isSuperAdmin && (
-                          <td className="px-[13px] py-[11px] whitespace-nowrap">
-                            <span className="text-[11px] px-[8px] py-[2px] rounded-[5px]"
-                              style={{ background: "rgba(99,102,241,0.1)", color: "#818cf8" }}>
-                              {p.workspace_name || "—"}
-                            </span>
-                          </td>
-                        )}
-                        <td className="px-[13px] py-[11px] whitespace-nowrap">                          <span className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-[20px] text-[11px] font-semibold" style={{ background: "rgba(59,130,246,.12)", color: "#2563eb" }}>
-                            {p.wip}
-                          </span>
-                        </td>
-                        <td className="px-[13px] py-[11px] whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-[20px] text-[11px] font-semibold" style={{ background: "rgba(245,158,11,.12)", color: "#d97706" }}>
-                            {p.sent_for_approval}
-                          </span>
-                        </td>
-                        <td className="px-[13px] py-[11px] whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-[20px] text-[11px] font-semibold" style={{ background: "rgba(16,185,129,.12)", color: "#10b981" }}>
-                            {p.closed}
-                          </span>
-                        </td>
-                        <td className="px-[13px] py-[11px] whitespace-nowrap text-gray-600">{p.total_tasks}</td>
-                        <td className="px-[13px] py-[11px] whitespace-nowrap text-gray-600">{p.expected_sp}</td>
-                        <td className="px-[13px] py-[11px] whitespace-nowrap font-semibold text-gray-900">{p.actual_sp}</td>
-                        <td className="px-[13px] py-[11px] max-w-[200px]">
-                          {p.dependencies && p.dependencies.length > 0 ? (
-                            <div className="flex flex-col gap-[3px]">
-                              {p.dependencies.map((dep, i) => (
-                                <span
-                                  key={i}
-                                  className="inline-block text-[10.5px] px-[7px] py-[2px] rounded-[5px] truncate max-w-[180px]"
-                                  style={{ background: "rgba(239,68,68,0.1)", color: "#f87171" }}
-                                  title={dep}
-                                >
-                                  {dep}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-[11px] text-gray-600">—</span>
-                          )}
-                        </td>
-                        <td className="px-[13px] py-[11px] whitespace-nowrap min-w-[120px]">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-[5px] rounded-full" style={{ background: "rgba(0,0,0,0.1)" }}>
-                              <div
-                                className="h-full rounded-full transition-all"
-                                style={{ width: `${Math.min(pct, 100)}%`, background: pct >= 80 ? "#10b981" : pct >= 50 ? "#d946ef" : "#f59e0b" }}
-                              />
-                            </div>
-                            <span className="text-[11px] text-gray-600 w-8 text-right">{pct}%</span>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-
-          {/* Footer totals */}
-          {!loading && progress.length > 0 && (
-            <div
-              className="flex items-center gap-[18px] px-[18px] py-[11px] flex-wrap"
-              style={{ borderTop: "1px solid rgba(0,0,0,0.07)", background: "rgba(0,0,0,0.02)" }}
-            >
-              {[
-                { label: "Total Tasks", val: totals.tasks, color: "#9ca3af" },
-                { label: "WIP", val: totals.wip, color: "#2563eb" },
-                { label: "In Review", val: totals.approval, color: "#d97706" },
-                { label: "Closed", val: totals.closed, color: "#10b981" },
-                { label: "SP Done", val: `${totals.actual} / ${totals.expected}`, color: "#9ca3af" },
-              ].map((s, i) => (
-                <span key={s.label} className="flex items-center gap-[5px] text-[12px] text-gray-600">
-                  {i > 0 && <span className="w-[1px] h-[13px] mr-[13px]" style={{ background: "rgba(0,0,0,0.07)" }} />}
-                  <strong style={{ color: s.color }}>{s.val}</strong> {s.label}
-                </span>
+          <div className="flex items-center gap-6">
+            <div className="hidden md:flex gap-6">
+              {["Solution", "Workflow", "Roles", "FAQ"].map(item => (
+                <a key={item} href={`#${item.toLowerCase()}`} className="text-[11px] font-semibold text-gray-500 hover:text-purple-600 transition-colors">{item}</a>
               ))}
             </div>
-          )}
+            <div className="h-4 w-px bg-gray-200 hidden md:block" />
+            <div className="flex items-center gap-4">
+              <Link href="/login" className="text-[11px] font-bold text-gray-600 hover:text-purple-600">Login</Link>
+              <Link href="/login" className="px-3 py-1 rounded-md bg-gray-900 text-white text-[11px] font-bold hover:bg-gray-800 transition-all">Sign Up</Link>
+            </div>
+          </div>
         </div>
+      </nav>
 
-      </div>
-    </>
+      {/* Hero Section */}
+      <header className="pt-24 pb-16 px-6 max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-12">
+        <div className="flex-1 text-left">
+          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-purple-50 text-[9px] font-bold text-purple-600 uppercase tracking-widest mb-4">
+            New: Teams Integration 2.0
+          </div>
+          <h1 className="text-3xl md:text-4xl font-black text-gray-900 leading-[1.1] mb-4">
+            The AI engine that <br className="hidden lg:block" />
+            powers your <span className="text-purple-600">Agile velocity.</span>
+          </h1>
+          <p className="text-[14px] text-gray-500 max-w-md leading-relaxed mb-8">
+            Transform messy chat updates into actionable sprint data. Agile Copilot
+            automates the tedious parts of project management so your team can
+            stay focused on what they do best: writing code.
+          </p>
+          <div className="flex items-center gap-3">
+            <Link href="/login" className="px-5 py-2 rounded-lg bg-purple-600 text-white font-bold text-[12px] shadow-sm hover:bg-purple-700 transition-all">
+              Get Started for Free
+            </Link>
+            <button className="px-5 py-2 rounded-lg border border-gray-200 text-gray-700 font-bold text-[12px] hover:bg-gray-50">
+              Watch Product Tour
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 relative">
+          <div className="absolute -inset-4 bg-purple-50 rounded-3xl -z-10 blur-xl" />
+          <div className="rounded-xl border border-gray-100 shadow-2xl overflow-hidden bg-white group cursor-pointer transition-transform hover:scale-[1.01]">
+            <img src="/images/dashboard.png" alt="Dashboard" className="w-full h-auto" />
+          </div>
+        </div>
+      </header>
+
+      {/* Interactive Tabs Section - Providing Context */}
+      <section id="solution" className="py-16 bg-gray-50/50 border-y border-gray-100">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="text-center mb-10">
+            <h2 className="text-[22px] font-black mb-2">Beyond Simple Tracking</h2>
+            <p className="text-[13px] text-gray-500">Agile Copilot is built specifically for modern developer workflows.</p>
+          </div>
+
+          <div className="flex flex-col md:flex-row gap-8 items-start">
+            <div className="w-full md:w-64 flex flex-col gap-1">
+              {features.map((f, i) => (
+                <button
+                  key={i}
+                  onClick={() => setActiveTab(i)}
+                  className={`text-left px-4 py-3 rounded-lg text-[12px] font-bold transition-all ${activeTab === i ? 'bg-white border border-gray-100 shadow-sm text-purple-600' : 'text-gray-500 hover:bg-gray-100'}`}
+                >
+                  {f.title}
+                </button>
+              ))}
+            </div>
+            <div className="flex-1 p-8 rounded-2xl bg-white border border-gray-100 shadow-sm min-h-[160px]">
+              <div className="text-2xl mb-4">{features[activeTab].icon}</div>
+              <h3 className="text-[15px] font-black mb-3">{features[activeTab].title}</h3>
+              <p className="text-[13px] text-gray-500 leading-relaxed max-w-2xl">{features[activeTab].desc}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Workflow Section */}
+      <section id="workflow" className="py-16 px-6 max-w-6xl mx-auto">
+        <div className="flex flex-col md:flex-row items-center gap-16">
+          <div className="flex-1 relative max-w-md">
+            <div className="absolute inset-0 bg-fuchsia-100/50 blur-[60px] -z-10" />
+            <div className="rounded-xl border-4 border-white shadow-xl overflow-hidden">
+              <img src="/images/teams.png" alt="Teams Integration" className="w-full h-auto" />
+            </div>
+          </div>
+          <div className="flex-1">
+            <h2 className="text-[22px] font-black mb-6">Built for Microsoft Teams</h2>
+            <div className="space-y-6">
+              {[
+                { step: "01", title: "Smart Webhooks", desc: "Our system listens to specific channel activity via secure Graph API subscriptions." },
+                { step: "02", title: "Contextual Parsing", desc: "The AI identifies project keywords, mentions, and status updates within natural sentences." },
+                { step: "03", title: "Live Sync", desc: "Dashboards reflect changes within 2 seconds of the message being sent." }
+              ].map((s, i) => (
+                <div key={i} className="flex gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold text-[11px]">{s.step}</div>
+                  <div>
+                    <h4 className="text-[13px] font-black text-gray-900 mb-0.5">{s.title}</h4>
+                    <p className="text-[12px] text-gray-500 leading-relaxed max-w-sm">{s.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Role Management */}
+      <section id="roles" className="py-16 px-6 max-w-6xl mx-auto border-t border-gray-100">
+        <div className="grid md:grid-cols-3 gap-8 mb-12">
+          <div className="p-8 rounded-2xl bg-white border border-gray-100 shadow-sm flex flex-col gap-5 hover:border-purple-200 transition-colors">
+            <div className="flex items-center justify-between">
+              <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-500 flex items-center justify-center text-lg">👑</div>
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Global</span>
+            </div>
+            <div>
+              <h3 className="text-sm font-black mb-2">Super Admin</h3>
+              <p className="text-[11px] text-gray-500 leading-relaxed mb-4">Enterprise-wide visibility. Audit every workspace, monitor overall delivery health, and manage system-level integrations.</p>
+              <div className="flex flex-wrap gap-2">
+                {["System Audit", "SLA Monitoring", "License Mgmt"].map(tag => (
+                  <span key={tag} className="px-2 py-0.5 rounded bg-gray-50 text-[9px] font-bold text-gray-500">{tag}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="p-8 rounded-2xl bg-white border-2 border-purple-100 shadow-lg shadow-purple-500/5 flex flex-col gap-5">
+            <div className="flex items-center justify-between">
+              <div className="w-10 h-10 rounded-lg bg-purple-50 text-purple-500 flex items-center justify-center text-lg">💼</div>
+              <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest">Workspace</span>
+            </div>
+            <div>
+              <h3 className="text-sm font-black mb-2">Workspace Manager</h3>
+              <p className="text-[11px] text-gray-500 leading-relaxed mb-4">Full team control. Manage sprint backlogs, approve task promotion, and monitor individual developer velocity.</p>
+              <div className="flex flex-wrap gap-2">
+                {["Member Sync", "Backlog Triage", "Burndown Charts"].map(tag => (
+                  <span key={tag} className="px-2 py-0.5 rounded bg-purple-50 text-[9px] font-bold text-purple-600">{tag}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="p-8 rounded-2xl bg-white border border-gray-100 shadow-sm flex flex-col gap-5 hover:border-purple-200 transition-colors">
+            <div className="flex items-center justify-between">
+              <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-500 flex items-center justify-center text-lg">⚡</div>
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Execution</span>
+            </div>
+            <div>
+              <h3 className="text-sm font-black mb-2">Team Member</h3>
+              <p className="text-[11px] text-gray-500 leading-relaxed mb-4">Native developer experience. Post updates in chat, see your personal progress dashboard, and focus on coding.</p>
+              <div className="flex flex-wrap gap-2">
+                {["Chatbot Sync", "Personal Goals", "Task History"].map(tag => (
+                  <span key={tag} className="px-2 py-0.5 rounded bg-gray-50 text-[9px] font-bold text-gray-500">{tag}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Impact & Detailed Metrics */}
+      <section className="py-16 bg-gray-900 text-white px-6 overflow-hidden relative">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/10 blur-[100px]" />
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-12 relative z-10">
+          <div className="flex-1">
+            <h2 className="text-[22px] font-black mb-6">Measurable improvement.</h2>
+            <div className="space-y-6">
+              {[
+                { t: "Automated Data Collection", d: "Eliminate the 15-minute daily 'update Jira' tax for every developer." },
+                { t: "Real-time Blocker Alerts", d: "Instantly notify managers when a blocker is detected in a chat message." },
+                { t: "Data-Driven Standups", d: "Use live velocity charts instead of memory-based verbal updates." }
+              ].map((item, i) => (
+                <div key={i} className="flex items-start gap-4">
+                  <div className="w-5 h-5 rounded-full bg-purple-500/20 border border-purple-500/50 flex items-center justify-center flex-shrink-0 mt-1">
+                    <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-[13px] font-bold text-white mb-1">{item.t}</h4>
+                    <p className="text-[12px] text-gray-400 leading-relaxed">{item.d}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="flex-1 grid grid-cols-2 gap-4">
+            {[
+              { title: "40%", desc: "Standup Time Reduction" },
+              { title: "2x", desc: "Task Visibility Increase" },
+              { title: "100%", desc: "Data Entry Automation" },
+              { title: "0", desc: "Training Required" },
+            ].map(stat => (
+              <div key={stat.desc} className="p-6 rounded-xl bg-white/5 border border-white/10 text-center">
+                <div className="text-[20px] font-black mb-1">{stat.title}</div>
+                <div className="text-[11px] text-gray-400">{stat.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ Accordion - Interactive */}
+      <section id="faq" className="py-20 px-6 max-w-3xl mx-auto">
+        <h2 className="text-[22px] font-black text-center mb-10">Frequently Asked</h2>
+        <div className="space-y-3">
+          {[
+            { q: "How does the Microsoft Teams integration work?", a: "We use Microsoft Graph API webhooks to securely listen to messages in your authorized channels. Our AI only processes messages that follow the EOD/Task format or mentions our bot." },
+            { q: "Can we self-host Agile Copilot?", a: "Currently, we offer a secure Cloud-based solution. Enterprise self-hosting options are on our roadmap for late 2026." },
+            { q: "Is the AI accuracy guaranteed?", a: "Our models have a 99.8% accuracy rate for standard English task descriptions. We always provide a 'review' state for tasks that are ambiguous." },
+            { q: "What happens to my data?", a: "Data is encrypted at rest and in transit. We are SOC2 Type II compliant and never sell your team's internal data." }
+          ].map((f, i) => (
+            <div key={i} className="group p-4 rounded-xl border border-gray-100 bg-white hover:border-purple-200 transition-colors cursor-pointer">
+              <div className="text-[12px] font-bold text-gray-900 mb-1 flex justify-between items-center">
+                {f.q}
+                <span className="text-gray-300 group-hover:text-purple-400">+</span>
+              </div>
+              <p className="text-[11px] text-gray-500 leading-relaxed hidden group-hover:block pt-2 border-t border-gray-50 mt-2">
+                {f.a}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="py-12 border-t border-gray-100 bg-white">
+        <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-6 text-[11px]">
+          <div className="flex items-center gap-2">
+            <span className="font-bold">⚡ Agile Copilot</span>
+            <span className="text-gray-400">© 2026 World Goods Market</span>
+          </div>
+          <div className="flex gap-8 text-gray-500 font-bold uppercase tracking-widest">
+            <a href="#" className="hover:text-purple-600">Privacy</a>
+            <a href="#" className="hover:text-purple-600">Terms</a>
+            <a href="#" className="hover:text-purple-600">Support</a>
+          </div>
+        </div>
+      </footer>
+    </div>
   );
 }

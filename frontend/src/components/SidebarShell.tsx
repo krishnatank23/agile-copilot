@@ -5,9 +5,9 @@ import Sidebar from "@/components/Sidebar";
 
 export default function SidebarShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
-  const isLogin = path === "/login";
+  const isPublic = path === "/login" || path === "/";
 
-  if (isLogin) return <>{children}</>;
+  if (isPublic) return <>{children}</>;
 
   return (
     <div className="flex min-h-screen">

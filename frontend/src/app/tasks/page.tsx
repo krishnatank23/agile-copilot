@@ -188,6 +188,7 @@ export default function TasksPage() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState<number | null>(null);
   const [editingCell, setEditingCell] = useState<EditingCell>(null);
+  const [backlogItems, setBacklogItems] = useState<string[]>([]);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [, startTransition] = useTransition();
   const tableScrollRef = useRef<HTMLDivElement>(null);
@@ -212,6 +213,23 @@ export default function TasksPage() {
         setLastRefreshed(new Date());
         setError("");
       });
+
+      // Fetch backlog if a specific member is selected
+      if (memberFilter !== "All") {
+        try {
+          const selectedMember = m.find((member) => member.display_name === memberFilter);
+          if (selectedMember) {
+            const b = await api.tasks.getBacklog(selectedMember.id);
+            setBacklogItems(b.map((item) => item.title));
+          } else {
+            setBacklogItems([]);
+          }
+        } catch (e) {
+          console.error("Failed to fetch backlog:", e);
+        }
+      } else {
+        setBacklogItems([]);
+      }
     } catch {
       setError("Could not load tasks — is the backend running?");
     } finally {
@@ -359,6 +377,25 @@ export default function TasksPage() {
               </Chip>
             ))}
           </div>
+
+          {/* Backlog Items */}
+          {memberFilter !== "All" && backlogItems.length > 0 && (
+            <div className="px-[18px] py-[12px] bg-indigo-50/30 border-b border-gray-100">
+              <h3 className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider mb-2 flex items-center gap-2">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3 h-3">
+                  <path d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+                Member Backlog ({backlogItems.length})
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {backlogItems.map((item, i) => (
+                  <div key={i} className="px-2 py-1 bg-white border border-indigo-100 rounded text-[11.5px] text-indigo-700 font-medium shadow-sm">
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Table */}
           <div

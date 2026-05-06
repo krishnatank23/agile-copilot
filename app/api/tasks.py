@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.db.database import get_db
 from app.db import crud
-from app.db.models import Member, Task, Workspace
+from app.db.models import Member, Task, Workspace, BacklogItem
 from app.adapters.teams import TeamsAdapter
 
 logger = logging.getLogger(__name__)
@@ -45,10 +45,23 @@ def _extract_mentions(text: str) -> list[str]:
     """Extract @mentions from text (e.g., @Harshil, @Krishna Tank Intern)."""
     if not text:
         return []
-    # Match @word or @word word (name with spaces, up to 3 words)
-    pattern = r'@([A-Za-z][A-Za-z\s]*)'
+    # Match @ followed by a name (can include spaces, letters, and dots)
+    # Stops at common punctuation or end of line.
+    pattern = r'@([A-Za-z0-9][A-Za-z0-9\s\._\-]*)'
     matches = re.findall(pattern, text)
-    return [m.strip() for m in matches]
+    # Clean up matches: trim and filter out empty ones
+    results = []
+    for m in matches:
+        m = m.strip()
+        # If it looks like a name (not just punctuation), add it
+        if m and len(m) > 1:
+            # Only take the first few words if it's very long
+            parts = m.split()
+            if len(parts) > 4:
+                results.append(" ".join(parts[:4]))
+            else:
+                results.append(m)
+    return results
 
 
 @router.get("")
@@ -109,10 +122,11 @@ async def update_task(
         raise HTTPException(status_code=404, detail="Task not found")
 
     # ── Send to Teams if comment has mentions ──
-    if body.comments:
-        logger.info(f"Comment updated for task {task_id}: {body.comments[:100]}")
-        mentions = _extract_mentions(body.comments)
-        logger.info(f"Extracted mentions: {mentions}")
+    comment_text = body.comments
+    if comment_text:
+        logger.info(f"Comment updated for task {task_id}: {comment_text[:100]}")
+        mentions = _extract_mentions(comment_text)
+        logger.info(f"Extracted mentions from '{comment_text}': {mentions}")
         
         if mentions:
             try:
@@ -152,10 +166,10 @@ async def update_task(
                 </div>
                 """
 
-                logger.info(f"Sending Teams message to workspace {member.workspace_id}")
+                logger.info(f"Sending Teams message to workspace {member.workspace_id} (chat: {workspace.teams_chat_id})")
                 # Send to Teams
                 adapter = TeamsAdapter.from_workspace(workspace)
-                await adapter.send_message(html_msg)
+                await adapter.send_message(html_msg, channel_id=workspace.teams_chat_id)
                 logger.info(f"✅ Teams message sent for task {task_id} with mentions: {mentions}")
             except Exception as e:
                 logger.error(f"❌ Failed to send Teams message for task {task_id}: {str(e)}", exc_info=True)
@@ -164,3 +178,65 @@ async def update_task(
             logger.info(f"No mentions found in comment for task {task_id}")
 
     return updated
+
+
+@router.get("/backlog")
+async def get_backlog(
+    member_id: int | None = None,
+    current_user: Annotated[dict, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Fetch backlog items for a member (or self)."""
+    role = current_user["role"]
+    
+    if role == "member":
+        target_id = current_user.get("member_id")
+    else:
+        # Managers can specify member_id or see their own (if they have one)
+        target_id = member_id or current_user.get("member_id")
+
+    if not target_id:
+        return []
+
+    return await crud.get_backlog_items(db, target_id)
+
+
+class BacklogCreate(BaseModel):
+    member_id: int
+    items: list[str | dict]
+
+
+@router.post("/backlog")
+async def add_backlog(
+    body: BacklogCreate,
+    current_user: Annotated[dict, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Add backlog items manually."""
+    # Access control: members can only add for themselves
+    if current_user["role"] == "member" and body.member_id != current_user.get("member_id"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    written = await crud.add_backlog_items(db, body.member_id, body.items)
+    return {"written": written}
+
+
+@router.delete("/backlog/{item_id}")
+async def delete_backlog_item(
+    item_id: int,
+    current_user: Annotated[dict, Depends(get_current_user)] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a backlog item."""
+    result = await db.execute(select(BacklogItem).where(BacklogItem.id == item_id))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    # Access control
+    if current_user["role"] == "member" and item.member_id != current_user.get("member_id"):
+        raise HTTPException(status_code=403, detail="Not authorized to delete this item")
+
+    await db.delete(item)
+    await db.commit()
+    return {"status": "deleted"}

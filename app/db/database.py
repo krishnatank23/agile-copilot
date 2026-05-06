@@ -37,6 +37,13 @@ _USER_COLS = [
     ("member_id", "INTEGER"),
 ]
 
+_BACKLOG_COLS = [
+    ("priority", "TEXT DEFAULT 'Medium'"),
+    ("story_points", "INTEGER DEFAULT 2"),
+    ("status", "TEXT DEFAULT 'Pending'"),
+    ("dependency", "TEXT"),
+]
+
 async def _add_missing_columns(conn, table: str, columns: list[tuple[str, str]]) -> None:
     result = await conn.execute(text(f"PRAGMA table_info({table})"))
     existing = {row[1] for row in result.fetchall()}
@@ -51,8 +58,8 @@ async def init_db() -> None:
         await conn.run_sync(Base.metadata.create_all)
         await _add_missing_columns(conn, "workspaces", _WORKSPACE_COLS)
         await _add_missing_columns(conn, "members", _MEMBER_COLS)
-
         await _add_missing_columns(conn, "users", _USER_COLS)
+        await _add_missing_columns(conn, "backlog_items", _BACKLOG_COLS)
 
 
 async def get_db():

@@ -58,13 +58,11 @@ export default function BacklogPage() {
           }
           setDependencyOptions(options);
 
-          // Members load their own backlog using member_id
+          // Members load their own backlog
           const memberId = user.member_id;
           if (memberId) {
-            const storedItems = localStorage.getItem(`backlog_member_${memberId}`);
-            if (storedItems) {
-              setItems(JSON.parse(storedItems));
-            }
+            const data = await api.tasks.getBacklog();
+            setItems(data);
           }
         } else if (isManager) {
           // Managers load all members' backlogs
@@ -85,25 +83,9 @@ export default function BacklogPage() {
           }
           setDependencyOptions(options);
           
-          const allItems: BacklogItem[] = [];
-          // Load backlog for each member using their member_id
-          visibleMembers.forEach(member => {
-            const storedItems = localStorage.getItem(`backlog_member_${member.id}`);
-            if (storedItems) {
-              try {
-                const memberItems = JSON.parse(storedItems);
-                // Ensure each item has the member_name set
-                const itemsWithMemberName = memberItems.map((item: BacklogItem) => ({
-                  ...item,
-                  member_name: member.display_name
-                }));
-                allItems.push(...itemsWithMemberName);
-              } catch (e) {
-                console.error(`Failed to parse backlog for member ${member.id}`, e);
-              }
-            }
-          });
-          setItems(allItems.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+          // Managers load all tasks initially, or use filter
+          const data = await api.tasks.getBacklog();
+          setItems(data);
         }
       } catch (err) {
         console.error("Failed to load backlog", err);
@@ -115,27 +97,23 @@ export default function BacklogPage() {
     loadData();
   }, [user, isMember, isManager]);
 
-  const saveItems = (newItems: BacklogItem[]) => {
-    if (isMember && user) {
-      // Members save to their own localStorage
-      const memberId = user.member_id;
-      if (memberId) {
-        localStorage.setItem(`backlog_member_${memberId}`, JSON.stringify(newItems));
-      }
-    } else if (isManager) {
-      // Managers save each member's items to their respective localStorage keys
-      const itemsByMemberId: Record<number, BacklogItem[]> = {};
-      newItems.forEach(item => {
-        const memberId = item.member_id || 0;
-        if (!itemsByMemberId[memberId]) itemsByMemberId[memberId] = [];
-        itemsByMemberId[memberId].push(item);
-      });
-      
-      // Save each member's items using their member_id
-      Object.entries(itemsByMemberId).forEach(([memberId, memberItems]) => {
-        localStorage.setItem(`backlog_member_${memberId}`, JSON.stringify(memberItems));
-      });
+  const fetchItems = async () => {
+    if (!user) return;
+    try {
+      const data = await api.tasks.getBacklog(selectedMemberFilter ? members.find(m => m.display_name === selectedMemberFilter)?.id : undefined);
+      setItems(data);
+    } catch (err) {
+      console.error("Failed to fetch backlog", err);
     }
+  };
+
+  useEffect(() => {
+    if (loading) return;
+    fetchItems();
+  }, [selectedMemberFilter]);
+
+  const saveItems = (newItems: BacklogItem[]) => {
+    // No-op for direct state updates if we use fetchItems instead
     setItems(newItems);
   };
 
@@ -172,19 +150,15 @@ export default function BacklogPage() {
         memberName = "";
       }
 
-      const newItem: BacklogItem = {
-        id: Date.now(),
+      await api.tasks.addBacklog(memberId, [{
         title: title.trim(),
         priority,
         story_points: Number(storyPoints),
         status: "Pending",
         dependency: dependency || undefined,
-        member_id: memberId,
-        member_name: memberName,
-        created_at: new Date().toISOString(),
-      };
+      } as any]);
 
-      saveItems([newItem, ...items]);
+      await fetchItems();
       setTitle("");
       setPriority("Medium");
       setStoryPoints("");
@@ -197,9 +171,13 @@ export default function BacklogPage() {
     }
   };
 
-  const removeItem = (id: number) => {
-    const updatedItems = items.filter(it => it.id !== id);
-    saveItems(updatedItems);
+  const removeItem = async (id: number) => {
+    try {
+      await api.tasks.deleteBacklog(id);
+      await fetchItems();
+    } catch (err) {
+      setError("Failed to delete item");
+    }
   };
 
   const updateStatus = (id: number, status: BacklogItem["status"]) => {

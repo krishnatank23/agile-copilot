@@ -128,6 +128,14 @@ export const api = {
         "/eod-webhook",
         { method: "POST", body: JSON.stringify({ sender, message, timestamp: new Date().toISOString() }) }
       ),
+    getBacklog: (memberId?: number) => {
+      const q = memberId ? `?member_id=${memberId}` : "";
+      return request<any[]>(`/tasks/backlog${q}`);
+    },
+    addBacklog: (memberId: number, items: string[]) =>
+      request("/tasks/backlog", { method: "POST", body: JSON.stringify({ member_id: memberId, items }) }),
+    deleteBacklog: (id: number) =>
+      request(`/tasks/backlog/${id}`, { method: "DELETE" }),
   },
   members: {
     list: () => request<Member[]>("/members"),

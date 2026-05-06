@@ -199,3 +199,16 @@ def is_eod_message(text: str) -> bool:
         return True
 
     return False
+
+
+def is_backlog_message(text: str) -> bool:
+    """
+    Check if a message is a backlog addition.
+    Triggers on:
+      - '/backlog' command
+      - 'backlog:' keyword
+    """
+    if not text:
+        return False
+    lower = text.lower()
+    return "/backlog" in lower or "backlog:" in lower
