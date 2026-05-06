@@ -33,17 +33,17 @@ export default function LoginPage() {
   return (
     <div
       className="min-h-screen flex items-center justify-center"
-      style={{ background: "#09090f" }}
+      style={{ background: "#f3f4f6" }}
     >
       {/* Glow */}
       <div
         className="fixed top-0 left-0 w-[560px] h-[560px] pointer-events-none"
-        style={{ background: "radial-gradient(ellipse at 0% 0%, rgba(147,51,234,0.13) 0%, transparent 65%)" }}
+        style={{ background: "radial-gradient(ellipse at 0% 0%, rgba(139,92,246,0.08) 0%, transparent 65%)" }}
       />
 
       <div
         className="relative w-full max-w-sm rounded-[16px] p-8 flex flex-col gap-6"
-        style={{ background: "#11111b", border: "1px solid rgba(255,255,255,0.07)" }}
+        style={{ background: "#ffffff", border: "1px solid rgba(0,0,0,0.1)" }}
       >
         {/* Brand */}
         <div className="flex flex-col items-center gap-3">
@@ -59,15 +59,15 @@ export default function LoginPage() {
             ⚡
           </div>
           <div className="text-center">
-            <p className="text-[18px] font-bold text-slate-100 tracking-tight">Agile Copilot</p>
-            <p className="text-[12px] text-slate-600 mt-[2px]">Sign in to your account</p>
+            <p className="text-[18px] font-bold text-gray-900 tracking-tight">Agile Copilot</p>
+            <p className="text-[12px] text-gray-600 mt-[2px]">Sign in to your account</p>
           </div>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-[6px]">
-            <label className="text-[12px] font-medium text-slate-400">Username</label>
+            <label className="text-[12px] font-medium text-gray-700">Username</label>
             <input
               type="text"
               autoComplete="username"
@@ -75,15 +75,15 @@ export default function LoginPage() {
               onChange={(e) => setUsername(e.target.value)}
               required
               placeholder="manager"
-              className="px-3 py-[10px] rounded-[8px] text-[13px] text-slate-100 placeholder:text-slate-600 outline-none transition-colors"
-              style={{ background: "#09090f", border: "1px solid rgba(255,255,255,0.07)" }}
-              onFocus={(e) => ((e.target as HTMLElement).style.borderColor = "rgba(217,70,239,0.4)")}
-              onBlur={(e) => ((e.target as HTMLElement).style.borderColor = "rgba(255,255,255,0.07)")}
+              className="px-3 py-[10px] rounded-[8px] text-[13px] text-gray-900 placeholder:text-gray-500 outline-none transition-colors"
+              style={{ background: "#f9fafb", border: "1px solid rgba(0,0,0,0.1)" }}
+              onFocus={(e) => ((e.target as HTMLElement).style.borderColor = "rgba(139,92,246,0.4)")}
+              onBlur={(e) => ((e.target as HTMLElement).style.borderColor = "rgba(0,0,0,0.1)")}
             />
           </div>
 
           <div className="flex flex-col gap-[6px]">
-            <label className="text-[12px] font-medium text-slate-400">Password</label>
+            <label className="text-[12px] font-medium text-gray-700">Password</label>
             <input
               type="password"
               autoComplete="current-password"
@@ -91,15 +91,15 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               placeholder="••••••••"
-              className="px-3 py-[10px] rounded-[8px] text-[13px] text-slate-100 placeholder:text-slate-600 outline-none transition-colors"
-              style={{ background: "#09090f", border: "1px solid rgba(255,255,255,0.07)" }}
-              onFocus={(e) => ((e.target as HTMLElement).style.borderColor = "rgba(217,70,239,0.4)")}
-              onBlur={(e) => ((e.target as HTMLElement).style.borderColor = "rgba(255,255,255,0.07)")}
+              className="px-3 py-[10px] rounded-[8px] text-[13px] text-gray-900 placeholder:text-gray-500 outline-none transition-colors"
+              style={{ background: "#f9fafb", border: "1px solid rgba(0,0,0,0.1)" }}
+              onFocus={(e) => ((e.target as HTMLElement).style.borderColor = "rgba(139,92,246,0.4)")}
+              onBlur={(e) => ((e.target as HTMLElement).style.borderColor = "rgba(0,0,0,0.1)")}
             />
           </div>
 
           {error && (
-            <p className="text-[12px] text-center" style={{ color: "#f87171" }}>{error}</p>
+            <p className="text-[12px] text-center" style={{ color: "#dc2626" }}>{error}</p>
           )}
 
           <button

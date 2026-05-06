@@ -54,52 +54,52 @@ function CreateManagerModal({
       <form
         onSubmit={submit}
         className="rounded-[14px] p-6 flex flex-col gap-4 w-full max-w-sm"
-        style={{ background: "#11111b", border: "1px solid rgba(217,70,239,0.2)" }}
+        style={{ background: "#ffffff", border: "1px solid rgba(139,92,246,0.2)" }}
       >
         <div className="flex items-center justify-between">
-          <p className="text-[14px] font-semibold text-slate-100">Create Team Manager</p>
-          <button type="button" onClick={onClose} className="text-slate-600 hover:text-slate-400 text-[20px] leading-none">×</button>
+          <p className="text-[14px] font-semibold text-gray-900">Create Team Manager</p>
+          <button type="button" onClick={onClose} className="text-gray-600 hover:text-gray-900 text-[20px] leading-none">×</button>
         </div>
 
         <div className="flex flex-col gap-[6px]">
-          <label className="text-[12px] font-medium text-slate-400">Workspace / Team</label>
+          <label className="text-[12px] font-medium text-gray-700">Workspace / Team</label>
           <select
             value={workspaceId}
             onChange={(e) => setWorkspaceId(Number(e.target.value))}
             required
-            className="px-3 py-2 rounded-[8px] text-[13px] text-slate-100 outline-none"
-            style={{ background: "#09090f", border: "1px solid rgba(255,255,255,0.07)" }}
+            className="px-3 py-2 rounded-[8px] text-[13px] text-gray-900 outline-none"
+            style={{ background: "#f9fafb", border: "1px solid rgba(0,0,0,0.1)" }}
           >
             {workspaces.map((ws) => (
               <option key={ws.id} value={ws.id}>{ws.name}</option>
             ))}
           </select>
-          <p className="text-[11px] text-slate-600">This manager will only see their team&apos;s data.</p>
+          <p className="text-[11px] text-gray-600">This manager will only see their team&apos;s data.</p>
         </div>
 
         <div className="flex flex-col gap-[6px]">
-          <label className="text-[12px] font-medium text-slate-400">Username</label>
+          <label className="text-[12px] font-medium text-gray-700">Username</label>
           <input
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required placeholder="e.g. design_manager"
-            className="px-3 py-2 rounded-[8px] text-[13px] text-slate-100 outline-none placeholder:text-slate-600"
-            style={{ background: "#09090f", border: "1px solid rgba(255,255,255,0.07)" }}
+            className="px-3 py-2 rounded-[8px] text-[13px] text-gray-900 outline-none placeholder:text-gray-500"
+            style={{ background: "#f9fafb", border: "1px solid rgba(0,0,0,0.1)" }}
           />
         </div>
 
         <div className="flex flex-col gap-[6px]">
-          <label className="text-[12px] font-medium text-slate-400">Password</label>
+          <label className="text-[12px] font-medium text-gray-700">Password</label>
           <input
             type="password" value={password}
             onChange={(e) => setPassword(e.target.value)}
             required placeholder="Min 6 characters"
-            className="px-3 py-2 rounded-[8px] text-[13px] text-slate-100 outline-none placeholder:text-slate-600"
-            style={{ background: "#09090f", border: "1px solid rgba(255,255,255,0.07)" }}
+            className="px-3 py-2 rounded-[8px] text-[13px] text-gray-900 outline-none placeholder:text-gray-500"
+            style={{ background: "#f9fafb", border: "1px solid rgba(0,0,0,0.1)" }}
           />
         </div>
 
-        {err && <p className="text-[11px]" style={{ color: "#f87171" }}>{err}</p>}
+        {err && <p className="text-[11px]" style={{ color: "#dc2626" }}>{err}</p>}
 
         <div className="flex gap-3 pt-1">
           <button
@@ -109,7 +109,7 @@ function CreateManagerModal({
           >
             {busy ? "Creating…" : "Create Manager"}
           </button>
-          <button type="button" onClick={onClose} className="px-4 py-2 text-[12px] text-slate-600 hover:text-slate-400">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-[12px] text-gray-600 hover:text-gray-900">
             Cancel
           </button>
         </div>
@@ -172,20 +172,20 @@ function EditUserModal({
       <form
         onSubmit={submit}
         className="rounded-[14px] p-6 flex flex-col gap-4 w-full max-w-sm"
-        style={{ background: "#11111b", border: "1px solid rgba(217,70,239,0.2)" }}
+        style={{ background: "#ffffff", border: "1px solid rgba(139,92,246,0.2)" }}
       >
         <div className="flex items-center justify-between">
-          <p className="text-[14px] font-semibold text-slate-100">Edit — {user.username}</p>
-          <button type="button" onClick={onClose} className="text-slate-600 hover:text-slate-400 text-[20px] leading-none">×</button>
+          <p className="text-[14px] font-semibold text-gray-900">Edit — {user.username}</p>
+          <button type="button" onClick={onClose} className="text-gray-600 hover:text-gray-900 text-[20px] leading-none">×</button>
         </div>
 
         <div className="flex flex-col gap-[6px]">
-          <label className="text-[12px] font-medium text-slate-400">Workspace / Team</label>
+          <label className="text-[12px] font-medium text-gray-700">Workspace / Team</label>
           <select
             value={workspaceId}
             onChange={(e) => setWorkspaceId(Number(e.target.value))}
-            className="px-3 py-2 rounded-[8px] text-[13px] text-slate-100 outline-none"
-            style={{ background: "#09090f", border: "1px solid rgba(255,255,255,0.07)" }}
+            className="px-3 py-2 rounded-[8px] text-[13px] text-gray-900 outline-none"
+            style={{ background: "#f9fafb", border: "1px solid rgba(0,0,0,0.1)" }}
           >
             {workspaces.map((ws) => (
               <option key={ws.id} value={ws.id}>{ws.name}</option>
@@ -194,17 +194,17 @@ function EditUserModal({
         </div>
 
         <div className="flex flex-col gap-[6px]">
-          <label className="text-[12px] font-medium text-slate-400">New Password <span className="text-slate-600">(leave blank to keep current)</span></label>
+          <label className="text-[12px] font-medium text-gray-700">New Password <span className="text-gray-600">(leave blank to keep current)</span></label>
           <input
             type="password" value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Min 6 characters"
-            className="px-3 py-2 rounded-[8px] text-[13px] text-slate-100 outline-none placeholder:text-slate-600"
-            style={{ background: "#09090f", border: "1px solid rgba(255,255,255,0.07)" }}
+            className="px-3 py-2 rounded-[8px] text-[13px] text-gray-900 outline-none placeholder:text-gray-500"
+            style={{ background: "#f9fafb", border: "1px solid rgba(0,0,0,0.1)" }}
           />
         </div>
 
-        {err && <p className="text-[11px]" style={{ color: "#f87171" }}>{err}</p>}
+        {err && <p className="text-[11px]" style={{ color: "#dc2626" }}>{err}</p>}
 
         <div className="flex gap-3 pt-1">
           <button
@@ -214,21 +214,21 @@ function EditUserModal({
           >
             {busy ? "Saving…" : "Save Changes"}
           </button>
-          <button type="button" onClick={onClose} className="px-4 py-2 text-[12px] text-slate-600 hover:text-slate-400">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-[12px] text-gray-600 hover:text-gray-900">
             Cancel
           </button>
         </div>
 
-        <div className="pt-1 border-t" style={{ borderColor: "rgba(255,255,255,0.07)" }}>
+        <div className="pt-1 border-t" style={{ borderColor: "rgba(0,0,0,0.1)" }}>
           <button
             type="button"
             onClick={handleDelete}
             disabled={deleting || busy}
             className="w-full py-2 rounded-[8px] text-[12px] font-semibold disabled:opacity-50 transition-colors"
             style={{
-              background: confirmDelete ? "rgba(239,68,68,0.15)" : "transparent",
-              color: confirmDelete ? "#f87171" : "#64748b",
-              border: `1px solid ${confirmDelete ? "rgba(239,68,68,0.3)" : "rgba(255,255,255,0.07)"}`,
+              background: confirmDelete ? "rgba(239,68,68,0.1)" : "transparent",
+              color: confirmDelete ? "#dc2626" : "#9ca3af",
+              border: `1px solid ${confirmDelete ? "rgba(239,68,68,0.2)" : "rgba(0,0,0,0.1)"}`,
             }}
           >
             {deleting ? "Deleting…" : confirmDelete ? "Click again to confirm delete" : "Delete User"}
@@ -243,11 +243,11 @@ function EditUserModal({
 
 function RoleBadge({ role }: { role: string }) {
   const styles: Record<string, { bg: string; color: string; label: string }> = {
-    super_admin: { bg: "rgba(245,158,11,0.1)",   color: "#f59e0b", label: "Super Admin" },
-    manager:     { bg: "rgba(217,70,239,0.1)",   color: "#e879f9", label: "Manager" },
-    member:      { bg: "rgba(59,130,246,0.1)",   color: "#60a5fa", label: "Member" },
+    super_admin: { bg: "rgba(245,158,11,0.1)",   color: "#d97706", label: "Super Admin" },
+    manager:     { bg: "rgba(139,92,246,0.1)",   color: "#7c3aed", label: "Manager" },
+    member:      { bg: "rgba(59,130,246,0.1)",   color: "#2563eb", label: "Member" },
   };
-  const s = styles[role] ?? { bg: "rgba(255,255,255,0.06)", color: "#475569", label: role };
+  const s = styles[role] ?? { bg: "rgba(0,0,0,0.06)", color: "#6b7280", label: role };
   return (
     <span className="text-[10px] px-[8px] py-[3px] rounded-full font-semibold" style={{ background: s.bg, color: s.color }}>
       {s.label}
@@ -279,7 +279,7 @@ export default function UsersPage() {
   if (user?.role !== "super_admin") {
     return (
       <div className="p-[26px] flex items-center justify-center min-h-[300px]">
-        <p className="text-[13px] text-slate-600">Super admin access required.</p>
+        <p className="text-[13px] text-gray-600">Super admin access required.</p>
       </div>
     );
   }
@@ -311,11 +311,11 @@ export default function UsersPage() {
       {/* Topbar */}
       <div
         className="sticky top-0 z-10 flex items-center justify-between px-[26px] py-[13px]"
-        style={{ background: "rgba(9,9,15,0.88)", backdropFilter: "blur(14px)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}
+        style={{ background: "rgba(255,255,255,0.95)", backdropFilter: "blur(14px)", borderBottom: "1px solid rgba(0,0,0,0.07)" }}
       >
         <div>
-          <h1 className="text-[19px] font-bold text-slate-100 tracking-[-0.5px]">Users & Access</h1>
-          <p className="text-[11.5px] text-slate-600 mt-[2px]">
+          <h1 className="text-[19px] font-bold text-gray-900 tracking-[-0.5px]">Users & Access</h1>
+          <p className="text-[11.5px] text-gray-600 mt-[2px]">
             {users.length} account{users.length !== 1 ? "s" : ""} · {managers.length} manager{managers.length !== 1 ? "s" : ""} across {workspaces.length} workspace{workspaces.length !== 1 ? "s" : ""}
           </p>
         </div>
@@ -340,7 +340,7 @@ export default function UsersPage() {
         {loading ? (
           <div className="flex flex-col gap-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-[56px] rounded-[10px] animate-pulse" style={{ background: "#11111b", border: "1px solid rgba(255,255,255,0.07)" }} />
+              <div key={i} className="h-[56px] rounded-[10px] animate-pulse" style={{ background: "#f0f0f0", border: "1px solid rgba(0,0,0,0.07)" }} />
             ))}
           </div>
         ) : (
@@ -386,14 +386,14 @@ export default function UsersPage() {
 
         {/* Help box */}
         <div
-          className="rounded-[12px] p-5 text-[12.5px] text-slate-600 flex flex-col gap-2"
-          style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)" }}
+          className="rounded-[12px] p-5 text-[12.5px] text-gray-600 flex flex-col gap-2"
+          style={{ background: "rgba(0,0,0,0.02)", border: "1px solid rgba(0,0,0,0.07)" }}
         >
-          <p className="font-semibold text-slate-400">How access works</p>
+          <p className="font-semibold text-gray-700">How access works</p>
           <ul className="list-disc list-inside space-y-1">
-            <li><span className="text-slate-300">Super Admin:</span> Sees and manages everything across all teams.</li>
-            <li><span className="text-slate-300">Manager:</span> Scoped to one workspace — sees their team&apos;s tasks and members only.</li>
-            <li><span className="text-slate-300">Member:</span> Sees only their own tasks. Created by managers from the Members page.</li>
+            <li><span className="text-gray-700">Super Admin:</span> Sees and manages everything across all teams.</li>
+            <li><span className="text-gray-700">Manager:</span> Scoped to one workspace — sees their team&apos;s tasks and members only.</li>
+            <li><span className="text-gray-700">Member:</span> Sees only their own tasks. Created by managers from the Members page.</li>
             <li>Members are auto-created when someone posts an EOD update in Teams or Slack.</li>
           </ul>
         </div>
@@ -410,16 +410,16 @@ function Section({
   title: string; count: number; color: string; action?: React.ReactNode; children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-[12px] overflow-hidden" style={{ background: "#11111b", border: "1px solid rgba(255,255,255,0.07)" }}>
+    <div className="rounded-[12px] overflow-hidden" style={{ background: "#ffffff", border: "1px solid rgba(0,0,0,0.07)" }}>
       <div
         className="flex items-center justify-between px-[18px] py-[13px]"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
+        style={{ borderBottom: "1px solid rgba(0,0,0,0.07)" }}
       >
         <div className="flex items-center gap-[9px]">
-          <span className="text-[13px] font-semibold text-slate-100">{title}</span>
+          <span className="text-[13px] font-semibold text-gray-900">{title}</span>
           <span
             className="text-[10px] px-[7px] py-[2px] rounded-full font-semibold"
-            style={{ background: "rgba(255,255,255,0.06)", color }}
+            style={{ background: "rgba(0,0,0,0.06)", color }}
           >
             {count}
           </span>
@@ -441,8 +441,8 @@ function UserRow({ user, workspaceName, onEdit }: { user: UserRecord; workspaceN
   return (
     <div
       className="flex items-center gap-4 px-[18px] py-[13px] transition-colors group"
-      style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
-      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.02)")}
+      style={{ borderBottom: "1px solid rgba(0,0,0,0.04)" }}
+      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.02)")}
       onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}
     >
       <div
@@ -452,8 +452,8 @@ function UserRow({ user, workspaceName, onEdit }: { user: UserRecord; workspaceN
         {initials}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-[13px] font-medium text-slate-100 truncate">{user.username}</p>
-        <p className="text-[11px] text-slate-600 mt-[1px] truncate">
+        <p className="text-[13px] font-medium text-gray-900 truncate">{user.username}</p>
+        <p className="text-[11px] text-gray-600 mt-[1px] truncate">
           {user.role === "member" && user.member_id ? `Member ID #${user.member_id} · ` : ""}
           {workspaceName}
         </p>
@@ -462,8 +462,8 @@ function UserRow({ user, workspaceName, onEdit }: { user: UserRecord; workspaceN
       {onEdit && (
         <button
           onClick={onEdit}
-          className="opacity-0 group-hover:opacity-100 transition-opacity text-[11px] px-[10px] py-[4px] rounded-[6px] text-slate-400 hover:text-slate-100"
-          style={{ border: "1px solid rgba(255,255,255,0.1)" }}
+          className="opacity-0 group-hover:opacity-100 transition-opacity text-[11px] px-[10px] py-[4px] rounded-[6px] text-gray-600 hover:text-gray-900"
+          style={{ border: "1px solid rgba(0,0,0,0.1)" }}
         >
           Edit
         </button>
@@ -474,6 +474,6 @@ function UserRow({ user, workspaceName, onEdit }: { user: UserRecord; workspaceN
 
 function EmptyRow({ message }: { message: string }) {
   return (
-    <div className="px-[18px] py-[16px] text-[12px] text-slate-600">{message}</div>
+    <div className="px-[18px] py-[16px] text-[12px] text-gray-600">{message}</div>
   );
 }

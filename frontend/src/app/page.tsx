@@ -35,21 +35,21 @@ function MetricCard({ label, value, sub, trend = "neutral", color, icon }: Metri
     blue:   { ico: "rgba(59,130,246,.12)",  txt: "#3b82f6", glow: "#3b82f6" },
   }[color];
 
-  const trendColor = trend === "up" ? "#10b981" : trend === "down" ? "#ef4444" : "#475569";
+  const trendColor = trend === "up" ? "#10b981" : trend === "down" ? "#ef4444" : "#6b7280";
 
   return (
     <div
       className="relative overflow-hidden rounded-[12px] cursor-default transition-transform hover:-translate-y-px"
-      style={{ background: "#11111b", border: "1px solid rgba(255,255,255,0.07)", padding: "18px 20px" }}
+      style={{ background: "#ffffff", border: "1px solid rgba(0,0,0,0.07)", padding: "18px 20px" }}
     >
       <div className="absolute -bottom-5 -right-5 w-20 h-20 rounded-full opacity-[0.09]" style={{ background: palette.glow }} />
       <div className="flex items-start justify-between mb-[11px]">
-        <span className="text-[11px] font-medium uppercase tracking-[0.5px] text-slate-600">{label}</span>
+        <span className="text-[11px] font-medium uppercase tracking-[0.5px] text-gray-600">{label}</span>
         <div className="flex items-center justify-center w-[30px] h-[30px] rounded-[8px]" style={{ background: palette.ico, color: palette.txt }}>
           {icon}
         </div>
       </div>
-      <div className="text-[30px] font-extrabold text-slate-100 leading-none tracking-[-1px] mb-[6px]">{value}</div>
+      <div className="text-[30px] font-extrabold text-gray-900 leading-none tracking-[-1px] mb-[6px]">{value}</div>
       <div className="text-[11.5px]" style={{ color: trendColor }}>{sub}</div>
     </div>
   );
@@ -122,13 +122,13 @@ export default function DashboardPage() {
       {/* Topbar */}
       <div
         className="sticky top-0 z-10 flex items-center justify-between px-[26px] py-[13px]"
-        style={{ background: "rgba(9,9,15,0.88)", backdropFilter: "blur(14px)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}
+        style={{ background: "rgba(255,255,255,0.95)", backdropFilter: "blur(14px)", borderBottom: "1px solid rgba(0,0,0,0.07)" }}
       >
         <div>
-          <h1 className="text-[19px] font-bold text-slate-100 tracking-[-0.5px]">
+          <h1 className="text-[19px] font-bold text-gray-900 tracking-[-0.5px]">
             {isSuperAdmin ? "Org Overview" : "Dashboard"}
           </h1>
-          <p className="text-[11.5px] text-slate-600 mt-[2px]">
+          <p className="text-[11.5px] text-gray-600 mt-[2px]">
             {isSuperAdmin
               ? `${workspaces.length} team${workspaces.length !== 1 ? "s" : ""} · ${activeMembers} active members`
               : `${activeMembers} member${activeMembers !== 1 ? "s" : ""} active this sprint`}
@@ -137,7 +137,7 @@ export default function DashboardPage() {
         <div className="flex items-center gap-[9px]">
           <div
             className="flex items-center gap-[5px] px-[11px] py-[5px] rounded-[7px] text-[12px] font-medium cursor-default"
-            style={{ border: "1px solid rgba(217,70,239,0.22)", background: "rgba(217,70,239,0.07)", color: "#e879f9" }}
+            style={{ border: "1px solid rgba(139,92,246,0.2)", background: "rgba(139,92,246,0.08)", color: "#7c3aed" }}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-[13px] h-[13px]">
               <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
@@ -146,13 +146,13 @@ export default function DashboardPage() {
             Sprint
           </div>
           {lastRefreshed && (
-            <span className="text-[11px] text-slate-600">synced {lastRefreshed.toLocaleTimeString()}</span>
+            <span className="text-[11px] text-gray-600">synced {lastRefreshed.toLocaleTimeString()}</span>
           )}
           <button
             id="dashboard-refresh-btn"
             onClick={() => { loadData(false); setCountdown(30); }}
             className="flex items-center gap-[5px] px-[11px] py-[5px] rounded-[7px] text-[12px] font-medium transition-all cursor-pointer"
-            style={{ border: "1px solid rgba(99,102,241,0.25)", background: "rgba(99,102,241,0.08)", color: "#818cf8" }}
+            style={{ border: "1px solid rgba(99,102,241,0.25)", background: "rgba(99,102,241,0.08)", color: "#4f46e5" }}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-[13px] h-[13px]">
               <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
@@ -167,7 +167,7 @@ export default function DashboardPage() {
       <div className="p-[26px] flex flex-col gap-[22px]">
 
         {error && (
-          <div className="rounded-[10px] px-4 py-3 text-sm" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", color: "#f87171" }}>
+          <div className="rounded-[10px] px-4 py-3 text-sm" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#dc2626" }}>
             {error}
           </div>
         )}
@@ -229,11 +229,11 @@ export default function DashboardPage() {
         )}
 
         {/* Sprint progress table */}
-        <div className="rounded-[12px] overflow-hidden" style={{ background: "#11111b", border: "1px solid rgba(255,255,255,0.07)" }}>
-          <div className="flex items-center justify-between px-[18px] py-[15px]" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+        <div className="rounded-[12px] overflow-hidden" style={{ background: "#ffffff", border: "1px solid rgba(0,0,0,0.07)" }}>
+          <div className="flex items-center justify-between px-[18px] py-[15px]" style={{ borderBottom: "1px solid rgba(0,0,0,0.07)" }}>
             <div>
-              <h2 className="text-[14px] font-semibold text-slate-100">Sprint Progress</h2>
-              <p className="text-[11.5px] text-slate-600 mt-[2px]">
+              <h2 className="text-[14px] font-semibold text-gray-900">Sprint Progress</h2>
+              <p className="text-[11.5px] text-gray-600 mt-[2px]">
                 {isSuperAdmin ? "All teams · per-member breakdown" : "Per-member breakdown"}
               </p>
             </div>
@@ -241,9 +241,9 @@ export default function DashboardPage() {
 
           <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 380px)" }}>
             {loading ? (
-              <div className="px-[18px] py-10 text-center text-[13px] text-slate-600">Loading…</div>
+              <div className="px-[18px] py-10 text-center text-[13px] text-gray-500">Loading…</div>
             ) : progress.length === 0 && !error ? (
-              <div className="px-[18px] py-12 text-center text-[13px] text-slate-600">
+              <div className="px-[18px] py-12 text-center text-[13px] text-gray-500">
                 No sprint data yet. Members will appear once they post EOD updates.
               </div>
             ) : (
@@ -254,7 +254,7 @@ export default function DashboardPage() {
                       <th
                         key={h}
                         className="px-[13px] py-[9px] text-left text-[10px] font-semibold uppercase tracking-[0.6px] whitespace-nowrap"
-                        style={{ color: "#475569", background: "#15151f", borderBottom: "1px solid rgba(255,255,255,0.07)" }}
+                        style={{ color: "#6b7280", background: "#ffffff", borderBottom: "1px solid rgba(0,0,0,0.07)" }}
                       >
                         {h}
                       </th>
@@ -269,8 +269,8 @@ export default function DashboardPage() {
                       <tr
                         key={p.member_id}
                         className="transition-colors"
-                        style={{ borderBottom: "1px solid rgba(255,255,255,0.032)" }}
-                        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.025)")}
+                        style={{ borderBottom: "1px solid rgba(0,0,0,0.032)" }}
+                        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.025)")}
                         onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}
                       >
                         <td className="px-[13px] py-[11px] whitespace-nowrap">
@@ -281,7 +281,7 @@ export default function DashboardPage() {
                             >
                               {initials(p.member)}
                             </div>
-                            <span className="font-medium text-slate-100">{p.member}</span>
+                            <span className="font-medium text-gray-900">{p.member}</span>
                           </div>
                         </td>
                         {isSuperAdmin && (
@@ -292,24 +292,23 @@ export default function DashboardPage() {
                             </span>
                           </td>
                         )}
-                        <td className="px-[13px] py-[11px] whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-[20px] text-[11px] font-semibold" style={{ background: "rgba(59,130,246,.12)", color: "#60a5fa" }}>
+                        <td className="px-[13px] py-[11px] whitespace-nowrap">                          <span className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-[20px] text-[11px] font-semibold" style={{ background: "rgba(59,130,246,.12)", color: "#2563eb" }}>
                             {p.wip}
                           </span>
                         </td>
                         <td className="px-[13px] py-[11px] whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-[20px] text-[11px] font-semibold" style={{ background: "rgba(245,158,11,.12)", color: "#fbbf24" }}>
+                          <span className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-[20px] text-[11px] font-semibold" style={{ background: "rgba(245,158,11,.12)", color: "#d97706" }}>
                             {p.sent_for_approval}
                           </span>
                         </td>
                         <td className="px-[13px] py-[11px] whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-[20px] text-[11px] font-semibold" style={{ background: "rgba(16,185,129,.12)", color: "#34d399" }}>
+                          <span className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-[20px] text-[11px] font-semibold" style={{ background: "rgba(16,185,129,.12)", color: "#10b981" }}>
                             {p.closed}
                           </span>
                         </td>
-                        <td className="px-[13px] py-[11px] whitespace-nowrap text-slate-400">{p.total_tasks}</td>
-                        <td className="px-[13px] py-[11px] whitespace-nowrap text-slate-400">{p.expected_sp}</td>
-                        <td className="px-[13px] py-[11px] whitespace-nowrap font-semibold text-slate-100">{p.actual_sp}</td>
+                        <td className="px-[13px] py-[11px] whitespace-nowrap text-gray-600">{p.total_tasks}</td>
+                        <td className="px-[13px] py-[11px] whitespace-nowrap text-gray-600">{p.expected_sp}</td>
+                        <td className="px-[13px] py-[11px] whitespace-nowrap font-semibold text-gray-900">{p.actual_sp}</td>
                         <td className="px-[13px] py-[11px] max-w-[200px]">
                           {p.dependencies && p.dependencies.length > 0 ? (
                             <div className="flex flex-col gap-[3px]">
@@ -325,18 +324,18 @@ export default function DashboardPage() {
                               ))}
                             </div>
                           ) : (
-                            <span className="text-[11px] text-slate-700">—</span>
+                            <span className="text-[11px] text-gray-600">—</span>
                           )}
                         </td>
                         <td className="px-[13px] py-[11px] whitespace-nowrap min-w-[120px]">
                           <div className="flex items-center gap-2">
-                            <div className="flex-1 h-[5px] rounded-full" style={{ background: "rgba(255,255,255,0.07)" }}>
+                            <div className="flex-1 h-[5px] rounded-full" style={{ background: "rgba(0,0,0,0.1)" }}>
                               <div
                                 className="h-full rounded-full transition-all"
                                 style={{ width: `${Math.min(pct, 100)}%`, background: pct >= 80 ? "#10b981" : pct >= 50 ? "#d946ef" : "#f59e0b" }}
                               />
                             </div>
-                            <span className="text-[11px] text-slate-400 w-8 text-right">{pct}%</span>
+                            <span className="text-[11px] text-gray-600 w-8 text-right">{pct}%</span>
                           </div>
                         </td>
                       </tr>
@@ -351,17 +350,17 @@ export default function DashboardPage() {
           {!loading && progress.length > 0 && (
             <div
               className="flex items-center gap-[18px] px-[18px] py-[11px] flex-wrap"
-              style={{ borderTop: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.015)" }}
+              style={{ borderTop: "1px solid rgba(0,0,0,0.07)", background: "rgba(0,0,0,0.02)" }}
             >
               {[
-                { label: "Total Tasks", val: totals.tasks, color: "#94a3b8" },
-                { label: "WIP", val: totals.wip, color: "#60a5fa" },
-                { label: "In Review", val: totals.approval, color: "#fbbf24" },
-                { label: "Closed", val: totals.closed, color: "#34d399" },
-                { label: "SP Done", val: `${totals.actual} / ${totals.expected}`, color: "#94a3b8" },
+                { label: "Total Tasks", val: totals.tasks, color: "#9ca3af" },
+                { label: "WIP", val: totals.wip, color: "#2563eb" },
+                { label: "In Review", val: totals.approval, color: "#d97706" },
+                { label: "Closed", val: totals.closed, color: "#10b981" },
+                { label: "SP Done", val: `${totals.actual} / ${totals.expected}`, color: "#9ca3af" },
               ].map((s, i) => (
-                <span key={s.label} className="flex items-center gap-[5px] text-[12px] text-slate-600">
-                  {i > 0 && <span className="w-[1px] h-[13px] mr-[13px]" style={{ background: "rgba(255,255,255,0.07)" }} />}
+                <span key={s.label} className="flex items-center gap-[5px] text-[12px] text-gray-600">
+                  {i > 0 && <span className="w-[1px] h-[13px] mr-[13px]" style={{ background: "rgba(0,0,0,0.07)" }} />}
                   <strong style={{ color: s.color }}>{s.val}</strong> {s.label}
                 </span>
               ))}

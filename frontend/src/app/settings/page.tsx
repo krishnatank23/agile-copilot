@@ -14,22 +14,22 @@ function Field({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-[12px] font-medium text-slate-400">{label}</label>
+      <label className="text-[12px] font-medium text-gray-700">{label}</label>
       <input
         id={id} type={type} value={value} readOnly={readOnly}
         onChange={(e) => onChange?.(e.target.value)}
         placeholder={placeholder}
-        className="px-3 py-2 rounded-[8px] text-[13px] text-slate-100 placeholder:text-slate-600 outline-none transition-colors"
+        className="px-3 py-2 rounded-[8px] text-[13px] text-gray-900 placeholder:text-gray-500 outline-none transition-colors"
         style={{
-          background: "#09090f",
-          border: "1px solid rgba(255,255,255,0.07)",
+          background: "#f9fafb",
+          border: "1px solid rgba(0,0,0,0.1)",
           cursor: readOnly ? "default" : undefined,
-          color: readOnly ? "#475569" : undefined,
+          color: readOnly ? "#6b7280" : undefined,
         }}
-        onFocus={(e) => { if (!readOnly) (e.target as HTMLElement).style.borderColor = "rgba(217,70,239,0.4)"; }}
-        onBlur={(e) => { if (!readOnly) (e.target as HTMLElement).style.borderColor = "rgba(255,255,255,0.07)"; }}
+        onFocus={(e) => { if (!readOnly) (e.target as HTMLElement).style.borderColor = "rgba(139,92,246,0.4)"; }}
+        onBlur={(e) => { if (!readOnly) (e.target as HTMLElement).style.borderColor = "rgba(0,0,0,0.1)"; }}
       />
-      {hint && <p className="text-[11px] text-slate-600">{hint}</p>}
+      {hint && <p className="text-[11px] text-gray-600">{hint}</p>}
     </div>
   );
 }
@@ -39,8 +39,9 @@ function StatusBadge({ connected }: { connected: boolean }) {
     <span
       className="px-[10px] py-[2px] rounded-full text-[11px] font-semibold"
       style={connected
-        ? { background: "rgba(16,185,129,0.12)", color: "#34d399" }
-        : { background: "rgba(255,255,255,0.06)", color: "#475569" }}
+        ? { background: "rgba(16,185,129,0.12)", color: "#10b981" }
+        : { background: "rgba(0,0,0,0.06)", color: "#6b7280" }
+      }
     >
       {connected ? "Connected" : "Not connected"}
     </span>
@@ -52,7 +53,7 @@ function SaveBtn({ saving, onClick }: { saving: boolean; onClick: () => void }) 
     <button
       onClick={onClick} disabled={saving}
       className="text-[12px] px-4 py-[7px] rounded-[8px] font-medium transition-colors disabled:opacity-50"
-      style={{ background: "rgba(217,70,239,0.15)", color: "#e879f9", border: "1px solid rgba(217,70,239,0.2)" }}
+      style={{ background: "rgba(139,92,246,0.1)", color: "#7c3aed", border: "1px solid rgba(139,92,2460.2)" }}
     >
       {saving ? "Saving…" : "Save Changes"}
     </button>
@@ -91,12 +92,12 @@ function AzureConfigCard({ ws, onUpdated }: { ws: Workspace; onUpdated: (ws: Wor
   return (
     <div
       className="rounded-[12px] p-5 flex flex-col gap-4"
-      style={{ background: "#11111b", border: "1px solid rgba(255,255,255,0.07)" }}
+      style={{ background: "#ffffff", border: "1px solid rgba(0,0,0,0.07)" }}
     >
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-[14px] font-semibold text-slate-100">Azure App Configuration</p>
-          <p className="text-[11px] text-slate-600 mt-[2px]">
+          <p className="text-[14px] font-semibold text-gray-900">Azure App Configuration</p>
+          <p className="text-[11px] text-gray600 mt-[2px]">
             Company-wide credentials — set once, shared across all team workspaces.
           </p>
         </div>
@@ -181,13 +182,13 @@ function TeamCard({
   return (
     <div
       className="rounded-[12px] p-5 flex flex-col gap-4"
-      style={{ background: "#11111b", border: "1px solid rgba(255,255,255,0.07)" }}
+      style={{ background: "#ffffff", border: "1px solid rgba(0,0,0,0.07)" }}
     >
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-[14px] font-semibold text-slate-100">{ws.name}</p>
-          <p className="text-[11px] text-slate-600 mt-[2px] capitalize">{ws.platform} workspace</p>
+          <p className="text-[14px] font-semibold text-gray-900">{ws.name}</p>
+          <p className="text-[11px] text-gray-600 mt-[2px] capitalize">{ws.platform} workspace</p>
         </div>
         <div className="flex gap-2 items-center">
           {(ws.platform === "teams" || ws.platform === "both") && <StatusBadge connected={ws.teams_connected} />}
@@ -212,8 +213,8 @@ function TeamCard({
           {/* Subscription — super admin only */}
           {isSuperAdmin && (
             <div className="sm:col-span-2 flex flex-wrap items-center gap-3 pt-1">
-              <div className="text-[11px] text-slate-600">
-                Subscription: <span className="font-mono text-slate-400">{ws.teams_subscription_id || "not registered"}</span>
+              <div className="text-[11px] text-gray-600">
+                Subscription: <span className="font-mono text-gray-600">{ws.teams_subscription_id || "not registered"}</span>
               </div>
               <button
                 onClick={subscribe} disabled={subscribing}
@@ -244,9 +245,9 @@ function TeamCard({
         </div>
       )}
 
-      <div className="flex items-center gap-3 pt-1" style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+      <div className="flex items-center gap-3 pt-1" style={{ borderTop: "1px solid rgba(0,0,0,0.07)" }}>
         <SaveBtn saving={saving} onClick={save} />
-        {msg && <p className="text-[11px] text-slate-600">{msg}</p>}
+        {msg && <p className="text-[11px] text-gray-600">{msg}</p>}
       </div>
     </div>
   );
@@ -283,10 +284,10 @@ function AddTeamForm({ onCreated }: { onCreated: (ws: Workspace) => void }) {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 px-4 py-3 rounded-[12px] text-[13px] text-slate-600 transition-colors w-full"
-        style={{ border: "2px dashed rgba(255,255,255,0.1)" }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(217,70,239,0.3)"; (e.currentTarget as HTMLElement).style.color = "#e879f9"; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.1)"; (e.currentTarget as HTMLElement).style.color = "#475569"; }}
+        className="flex items-center gap-2 px-4 py-3 rounded-[12px] text-[13px] text-gray-600 transition-colors w-full"
+        style={{ border: "2px dashed rgba(0,0,0,0.1)" }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(139,92,246,0.3)"; (e.currentTarget as HTMLElement).style.color = "#7c3aed"; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,0,0,0.1)"; (e.currentTarget as HTMLElement).style.color = "#6b7280"; }}
       >
         <span className="text-[18px] leading-none">+</span> Add New Team
       </button>
@@ -295,15 +296,15 @@ function AddTeamForm({ onCreated }: { onCreated: (ws: Workspace) => void }) {
 
   return (
     <form onSubmit={submit} className="rounded-[12px] p-5 flex flex-col gap-4"
-      style={{ background: "#11111b", border: "1px solid rgba(217,70,239,0.2)" }}>
+      style={{ background: "#ffffff", border: "1px solid rgba(139,92,246,0.2)" }}>
       <div className="flex items-center justify-between">
         <div>
-          <p className="font-semibold text-[14px] text-slate-100">Add New Team</p>
-          <p className="text-[11px] text-slate-600 mt-[2px]">
+          <p className="font-semibold text-[14px] text-gray-900">Add New Team</p>
+          <p className="text-[11px] text-gray-600 mt-[2px]">
             Azure credentials are inherited from the config above automatically.
           </p>
         </div>
-        <button type="button" onClick={() => setOpen(false)} className="text-slate-600 hover:text-slate-400 text-[20px] leading-none">×</button>
+        <button type="button" onClick={() => setOpen(false)} className="text-gray-600 hover:text-gray-900 text-[20px] leading-none">×</button>
       </div>
 
       {/* Inherited credentials notice */}
@@ -329,15 +330,15 @@ function AddTeamForm({ onCreated }: { onCreated: (ws: Workspace) => void }) {
           hint="Defaults to the EOD chat if left blank." />
       </div>
 
-      {err && <p className="text-[12px]" style={{ color: "#f87171" }}>{err}</p>}
+      {err && <p className="text-[12px]" style={{ color: "#dc2626" }}>{err}</p>}
       <div className="flex gap-3">
         <button type="submit" disabled={busy}
           className="px-5 py-2 rounded-[8px] text-[12px] font-medium transition-colors disabled:opacity-50"
-          style={{ background: "rgba(217,70,239,0.15)", color: "#e879f9", border: "1px solid rgba(217,70,239,0.2)" }}
+          style={{ background: "rgba(139,92,246,0.15)", color: "#7c3aed", border: "1px solid rgba(139,92,246,0.2)" }}
         >
           {busy ? "Adding…" : "Add Team"}
         </button>
-        <button type="button" onClick={() => setOpen(false)} className="px-4 py-2 text-[12px] text-slate-600 hover:text-slate-400 transition-colors">
+        <button type="button" onClick={() => setOpen(false)} className="px-4 py-2 text-[12px] text-gray-600 hover:text-gray-900 transition-colors">
           Cancel
         </button>
       </div>
@@ -365,7 +366,7 @@ export default function SettingsPage() {
   if (user?.role === "member") {
     return (
       <div className="p-[26px] flex items-center justify-center min-h-[300px]">
-        <p className="text-[13px] text-slate-600">You don&apos;t have access to this page.</p>
+        <p className="text-[13px] text-gray-600">You don&apos;t have access to this page.</p>
       </div>
     );
   }
@@ -406,7 +407,7 @@ export default function SettingsPage() {
         {loading ? (
           <div className="flex flex-col gap-3">
             {[1, 2].map((i) => (
-              <div key={i} className="h-32 rounded-[12px] animate-pulse" style={{ background: "#11111b", border: "1px solid rgba(255,255,255,0.07)" }} />
+              <div key={i} className="h-32 rounded-[12px] animate-pulse" style={{ background: "#f0f0f0", border: "1px solid rgba(0,0,0,0.07)" }} />
             ))}
           </div>
         ) : (

@@ -29,6 +29,7 @@ const NAV_MANAGER = [
       { href: "/", label: "Dashboard", icon: <DashIcon /> },
       { href: "/tasks", label: "Tasks", icon: <TasksIcon /> },
       { href: "/members", label: "Members", icon: <MembersIcon /> },
+      { href: "/backlog", label: "Team Backlog", icon: <BacklogIcon /> },
     ],
   },
   {
@@ -45,6 +46,7 @@ const NAV_MEMBER = [
     items: [
       { href: "/", label: "My Dashboard", icon: <DashIcon /> },
       { href: "/tasks", label: "My Tasks", icon: <TasksIcon /> },
+      { href: "/backlog", label: "My Backlog", icon: <BacklogIcon /> },
     ],
   },
 ];
@@ -81,6 +83,16 @@ function MembersIcon() {
       <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
       <circle cx="9" cy="7" r="4"/>
       <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+    </svg>
+  );
+}
+
+function BacklogIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-[15px] h-[15px] flex-shrink-0">
+      <path d="M12 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/>
     </svg>
   );
 }
@@ -130,10 +142,10 @@ export default function Sidebar() {
   return (
     <aside
       className="fixed left-0 top-0 bottom-0 z-20 flex flex-col"
-      style={{ width: 228, background: "#11111b", borderRight: "1px solid rgba(255,255,255,0.07)" }}
+      style={{ width: 228, background: "#ffffff", borderRight: "1px solid rgba(0,0,0,0.07)" }}
     >
       {/* Brand */}
-      <div className="flex items-center gap-[10px] px-[18px] py-5" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+      <div className="flex items-center gap-[10px] px-[18px] py-5" style={{ borderBottom: "1px solid rgba(0,0,0,0.07)" }}>
         <div
           className="flex-shrink-0 flex items-center justify-center rounded-[9px] text-[17px]"
           style={{ width: 34, height: 34, background: "linear-gradient(135deg,#d946ef,#9333ea)", boxShadow: "0 0 18px rgba(217,70,239,0.35)" }}
@@ -141,13 +153,13 @@ export default function Sidebar() {
           ⚡
         </div>
         <div>
-          <div className="text-[14.5px] font-bold text-slate-100 tracking-[-0.3px]">Agile Copilot</div>
-          <div className="text-[10px] text-slate-600 mt-[1px]">World Goods Market</div>
+          <div className="text-[14.5px] font-bold text-gray-900 tracking-[-0.3px]">Agile Copilot</div>
+          <div className="text-[10px] text-gray-600 mt-[1px]">World Goods Market</div>
         </div>
       </div>
 
       {/* Role badge */}
-      <div className="px-[18px] py-[10px]" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+      <div className="px-[18px] py-[10px]" style={{ borderBottom: "1px solid rgba(0,0,0,0.07)" }}>
         <span className="text-[10px] font-semibold px-[8px] py-[3px] rounded-full" style={roleBadgeStyle}>
           {roleLabel}
         </span>
@@ -157,7 +169,7 @@ export default function Sidebar() {
       <nav className="flex-1 overflow-y-auto px-[10px] py-[14px]" style={{ scrollbarWidth: "none" }}>
         {sections.map((section) => (
           <div key={section.label}>
-            <div className="text-[10px] font-semibold text-slate-600 uppercase tracking-[1px] px-2 mt-[14px] mb-[5px] first:mt-[2px]">
+            <div className="text-[10px] font-semibold text-gray-600 uppercase tracking-[1px] px-2 mt-[14px] mb-[5px] first:mt-[2px]">
               {section.label}
             </div>
             {section.items.map((item) => {
@@ -169,11 +181,11 @@ export default function Sidebar() {
                   className="flex items-center gap-[9px] px-[10px] py-[9px] rounded-[7px] text-[13px] font-medium mb-[1px] transition-all border"
                   style={
                     active
-                      ? { background: "rgba(217,70,239,0.11)", color: "#e879f9", borderColor: "rgba(217,70,239,0.18)" }
-                      : { color: "#475569", borderColor: "transparent" }
+                      ? { background: "rgba(139,92,246,0.1)", color: "#7c3aed", borderColor: "rgba(139,92,246,0.2)" }
+                      : { color: "#6b7280", borderColor: "transparent" }
                   }
-                  onMouseEnter={(e) => { if (!active) { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)"; (e.currentTarget as HTMLElement).style.color = "#94a3b8"; } }}
-                  onMouseLeave={(e) => { if (!active) { (e.currentTarget as HTMLElement).style.background = ""; (e.currentTarget as HTMLElement).style.color = "#475569"; } }}
+                  onMouseEnter={(e) => { if (!active) { (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.04)"; (e.currentTarget as HTMLElement).style.color = "#374151"; } }}
+                  onMouseLeave={(e) => { if (!active) { (e.currentTarget as HTMLElement).style.background = ""; (e.currentTarget as HTMLElement).style.color = "#6b7280"; } }}
                 >
                   {item.icon}
                   {item.label}
@@ -185,7 +197,7 @@ export default function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="px-[10px] py-3" style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+      <div className="px-[10px] py-3" style={{ borderTop: "1px solid rgba(0,0,0,0.07)" }}>
         <div className="flex items-center gap-[9px] px-[10px] py-2 rounded-[7px]">
           <div
             className="flex-shrink-0 flex items-center justify-center rounded-full text-[11px] font-bold text-white"
@@ -194,13 +206,13 @@ export default function Sidebar() {
             {avatarLetter}
           </div>
           <div className="flex-1 min-w-0">
-            <strong className="block text-[12px] text-slate-100 truncate">{displayName}</strong>
-            <span className="text-[10.5px] text-slate-600">{roleLabel}</span>
+            <strong className="block text-[12px] text-gray-900 truncate">{displayName}</strong>
+            <span className="text-[10.5px] text-gray-600">{roleLabel}</span>
           </div>
           <button
             onClick={logout}
             title="Sign out"
-            className="flex-shrink-0 text-slate-600 hover:text-slate-400 transition-colors"
+            className="flex-shrink-0 text-gray-600 hover:text-gray-900 transition-colors"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-[14px] h-[14px]">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>

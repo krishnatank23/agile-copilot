@@ -44,33 +44,33 @@ function CreateLoginModal({
       <form
         onSubmit={submit}
         className="rounded-[14px] p-6 flex flex-col gap-4 w-full max-w-sm"
-        style={{ background: "#11111b", border: "1px solid rgba(217,70,239,0.2)" }}
+        style={{ background: "#ffffff", border: "1px solid rgba(139,92,246,0.2)" }}
       >
         <div className="flex items-center justify-between">
-          <p className="text-[14px] font-semibold text-slate-100">Create Login — {member.display_name}</p>
-          <button type="button" onClick={onClose} className="text-slate-600 hover:text-slate-400 text-[20px] leading-none">×</button>
+          <p className="text-[14px] font-semibold text-gray-900">Create Login — {member.display_name}</p>
+          <button type="button" onClick={onClose} className="text-gray-600 hover:text-gray-900 text-[20px] leading-none">×</button>
         </div>
         <div className="flex flex-col gap-[6px]">
-          <label className="text-[12px] font-medium text-slate-400">Username</label>
+          <label className="text-[12px] font-medium text-gray-700">Username</label>
           <input value={username} onChange={(e) => setUsername(e.target.value)} required
-            className="px-3 py-2 rounded-[8px] text-[13px] text-slate-100 outline-none"
-            style={{ background: "#09090f", border: "1px solid rgba(255,255,255,0.07)" }} />
+            className="px-3 py-2 rounded-[8px] text-[13px] text-gray-900 outline-none"
+            style={{ background: "#f9fafb", border: "1px solid rgba(0,0,0,0.1)" }} />
         </div>
         <div className="flex flex-col gap-[6px]">
-          <label className="text-[12px] font-medium text-slate-400">Password</label>
+          <label className="text-[12px] font-medium text-gray-700">Password</label>
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
             placeholder="Min 6 characters"
-            className="px-3 py-2 rounded-[8px] text-[13px] text-slate-100 outline-none placeholder:text-slate-600"
-            style={{ background: "#09090f", border: "1px solid rgba(255,255,255,0.07)" }} />
+            className="px-3 py-2 rounded-[8px] text-[13px] text-gray-900 outline-none placeholder:text-gray-500"
+            style={{ background: "#f9fafb", border: "1px solid rgba(0,0,0,0.1)" }} />
         </div>
-        {err && <p className="text-[11px]" style={{ color: "#f87171" }}>{err}</p>}
+        {err && <p className="text-[11px]" style={{ color: "#dc2626" }}>{err}</p>}
         <div className="flex gap-3 pt-1">
           <button type="submit" disabled={busy}
             className="flex-1 py-2 rounded-[8px] text-[12px] font-semibold disabled:opacity-50"
             style={{ background: "linear-gradient(135deg,#d946ef,#9333ea)", color: "#fff" }}>
             {busy ? "Creating…" : "Create Login"}
           </button>
-          <button type="button" onClick={onClose} className="px-4 py-2 text-[12px] text-slate-600 hover:text-slate-400">Cancel</button>
+          <button type="button" onClick={onClose} className="px-4 py-2 text-[12px] text-gray-600 hover:text-gray-9">Cancel</button>
         </div>
       </form>
     </div>
@@ -135,24 +135,24 @@ function AddMemberModal({
       <form
         onSubmit={submit}
         className="rounded-[14px] p-6 flex flex-col gap-4 w-full max-w-sm"
-        style={{ background: "#11111b", border: "1px solid rgba(217,70,239,0.2)" }}
+        style={{ background: "#ffffff", border: "1px solid rgba(139,92,246,0.2)" }}
       >
         <div className="flex items-center justify-between">
-          <p className="text-[14px] font-semibold text-slate-100">Add Team Member</p>
-          <button type="button" onClick={onClose} className="text-slate-600 hover:text-slate-400 text-[20px] leading-none">x</button>
+          <p className="text-[14px] font-semibold text-gray-900">Add Team Member</p>
+          <button type="button" onClick={onClose} className="text-gray-600 hover:text-gray-900 text-[20px] leading-none">x</button>
         </div>
         <div className="flex flex-col gap-[6px]">
-          <label className="text-[12px] font-medium text-slate-400">Display Name</label>
+          <label className="text-[12px] font-medium text-gray-700">Display Name</label>
           <input
             value={displayName}
             onChange={(e) => onDisplayNameChange(e.target.value)}
             required
             placeholder="e.g. Priya Shah"
-            className="px-3 py-2 rounded-[8px] text-[13px] text-slate-100 outline-none placeholder:text-slate-600"
-            style={{ background: "#09090f", border: "1px solid rgba(255,255,255,0.07)" }}
+            className="px-3 py-2 rounded-[8px] text-[13px] text-gray-900 outline-none placeholder:text-gray-500"
+            style={{ background: "#f9fafb", border: "1px solid rgba(0,0,0,0.1)" }}
           />
         </div>
-        <label className="flex items-center gap-2 text-[12px] text-slate-400">
+        <label className="flex items-center gap-2 text-[12px] text-gray-700">
           <input
             type="checkbox"
             checked={createLoginNow}
@@ -163,31 +163,31 @@ function AddMemberModal({
         {createLoginNow && (
           <>
             <div className="flex flex-col gap-[6px]">
-              <label className="text-[12px] font-medium text-slate-400">Username</label>
+              <label className="text-[12px] font-medium text-gray-700">Username</label>
               <input
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required={createLoginNow}
                 placeholder="e.g. priyashah"
-                className="px-3 py-2 rounded-[8px] text-[13px] text-slate-100 outline-none placeholder:text-slate-600"
-                style={{ background: "#09090f", border: "1px solid rgba(255,255,255,0.07)" }}
+                className="px-3 py-2 rounded-[8px] text-[13px] text-gray-900 outline-none placeholder:text-gray-500"
+                style={{ background: "#f9fafb", border: "1px solid rgba(0,0,0,0.1)" }}
               />
             </div>
             <div className="flex flex-col gap-[6px]">
-              <label className="text-[12px] font-medium text-slate-400">Password</label>
+              <label className="text-[12px] font-medium text-gray-700">Password</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required={createLoginNow}
                 placeholder="Set temporary password"
-                className="px-3 py-2 rounded-[8px] text-[13px] text-slate-100 outline-none placeholder:text-slate-600"
-                style={{ background: "#09090f", border: "1px solid rgba(255,255,255,0.07)" }}
+                className="px-3 py-2 rounded-[8px] text-[13px] text-gray-900 outline-none placeholder:text-gray-500"
+                style={{ background: "#f9fafb", border: "1px solid rgba(0,0,0,0.1)" }}
               />
             </div>
           </>
         )}
-        {err && <p className="text-[11px]" style={{ color: "#f87171" }}>{err}</p>}
+        {err && <p className="text-[11px]" style={{ color: "#dc2626" }}>{err}</p>}
         <div className="flex gap-3 pt-1">
           <button
             type="submit"
@@ -197,7 +197,7 @@ function AddMemberModal({
           >
             {busy ? "Adding..." : "Add Member"}
           </button>
-          <button type="button" onClick={onClose} className="px-4 py-2 text-[12px] text-slate-600 hover:text-slate-400">Cancel</button>
+          <button type="button" onClick={onClose} className="px-4 py-2 text-[12px] text-gray-600 hover:text-gray-9">Cancel</button>
         </div>
       </form>
     </div>
@@ -259,12 +259,12 @@ export default function MembersPage() {
 
       {/* Topbar */}
       <div className="sticky top-0 z-10 flex items-center justify-between px-[26px] py-[13px]"
-        style={{ background: "rgba(9,9,15,0.88)", backdropFilter: "blur(14px)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+        style={{ background: "rgba(255,255,255,0.95)", backdropFilter: "blur(14px)", borderBottom: "1px solid rgba(0,0,0,0.07)" }}>
         <div>
-          <h1 className="text-[19px] font-bold text-slate-100 tracking-[-0.5px]">
+          <h1 className="text-[19px] font-bold text-gray-900 tracking-[-0.5px]">
             {user?.role === "super_admin" ? "All Members" : isManager ? "Team Members" : "My Profile"}
           </h1>
-          <p className="text-[11.5px] text-slate-600 mt-[2px]">
+          <p className="text-[11.5px] text-gray-600 mt-[2px]">
             {isManager
               ? `${members.length} member${members.length !== 1 ? "s" : ""} · add manually or auto-create on first EOD`
               : "Your sprint summary"}
@@ -289,11 +289,11 @@ export default function MembersPage() {
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[13px]">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-[130px] rounded-[12px] animate-pulse" style={{ background: "#11111b", border: "1px solid rgba(255,255,255,0.07)" }} />
+              <div key={i} className="h-[130px] rounded-[12px] animate-pulse" style={{ background: "#f0f0f0", border: "1px solid rgba(0,0,0,0.07)" }} />
             ))}
           </div>
         ) : members.length === 0 ? (
-          <div className="rounded-[12px] px-[18px] py-12 text-center text-[13px] text-slate-600" style={{ background: "#11111b", border: "1px solid rgba(255,255,255,0.07)" }}>
+          <div className="rounded-[12px] px-[18px] py-12 text-center text-[13px] text-gray-600" style={{ background: "#ffffff", border: "1px solid rgba(0,0,0,0.07)" }}>
             <p>No members yet.</p>
             {isManager && (
               <button
@@ -314,9 +314,9 @@ export default function MembersPage() {
               const hasLogin = usedMemberIds.has(m.id);
               return (
                 <div key={m.id} className="rounded-[12px] p-5 flex flex-col gap-4 transition-all hover:-translate-y-px"
-                  style={{ background: "#11111b", border: "1px solid rgba(255,255,255,0.07)" }}
-                  onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "rgba(217,70,239,0.25)")}
-                  onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.07)")}>
+                  style={{ background: "#ffffff", border: "1px solid rgba(0,0,0,0.07)" }}
+                  onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "rgba(139,92,246,0.3)")}
+                  onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "rgba(0,0,0,0.07)")}>
 
                   <div className="flex items-center gap-3">
                     <div className="flex-shrink-0 flex items-center justify-center rounded-full text-[12px] font-bold text-white"
@@ -324,8 +324,8 @@ export default function MembersPage() {
                       {initials(m.display_name)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[14px] font-semibold text-slate-100">{m.display_name}</p>
-                      <p className="text-[11px] text-slate-600">Joined {new Date(m.created_at).toLocaleDateString()}</p>
+                      <p className="text-[14px] font-semibold text-gray-900">{m.display_name}</p>
+                      <p className="text-[11px] text-gray-600">Joined {new Date(m.created_at).toLocaleDateString()}</p>
                     </div>
                     {isManager && (
                       hasLogin ? (
@@ -353,23 +353,23 @@ export default function MembersPage() {
                         ].map((s) => (
                           <div key={s.label} className="rounded-[8px] py-2" style={{ background: s.bg }}>
                             <p className="text-[18px] font-bold" style={{ color: s.color }}>{s.val}</p>
-                            <p className="text-[11px] text-slate-600">{s.label}</p>
+                            <p className="text-[11px] text-gray-600">{s.label}</p>
                           </div>
                         ))}
                       </div>
                       <div>
-                        <div className="flex justify-between text-[11px] text-slate-600 mb-[6px]">
+                        <div className="flex justify-between text-[11px] text-gray-600 mb-[6px]">
                           <span>{p.actual_sp} / {p.expected_sp} SP</span>
                           <span style={{ color: pct >= 80 ? "#34d399" : pct >= 50 ? "#e879f9" : "#fbbf24" }}>{pct}%</span>
                         </div>
-                        <div className="h-[4px] rounded-full" style={{ background: "rgba(255,255,255,0.07)" }}>
+                        <div className="h-[4px] rounded-full" style={{ background: "rgba(0,0,0,0.07)" }}>
                           <div className="h-full rounded-full transition-all"
                             style={{ width: `${Math.min(pct, 100)}%`, background: pct >= 80 ? "#10b981" : pct >= 50 ? "#d946ef" : "#f59e0b" }} />
                         </div>
                       </div>
                     </>
                   ) : (
-                    <p className="text-[12px] text-slate-600">No tasks this sprint.</p>
+                    <p className="text-[12px] text-gray-600">No tasks this sprint.</p>
                   )}
                 </div>
               );

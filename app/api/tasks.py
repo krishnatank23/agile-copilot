@@ -1,5 +1,7 @@
 """Task REST endpoints — consumed by the web UI."""
 
+import re
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,7 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.db.database import get_db
 from app.db import crud
-from app.db.models import Member, Task
+from app.db.models import Member, Task, Workspace
+from app.adapters.teams import TeamsAdapter
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
@@ -34,6 +39,16 @@ def _workspace_id_for(user: dict) -> int | None:
     if role == "super_admin":
         return None
     return user.get("workspace_id") or 1
+
+
+def _extract_mentions(text: str) -> list[str]:
+    """Extract @mentions from text (e.g., @Harshil, @Krishna Tank Intern)."""
+    if not text:
+        return []
+    # Match @word or @word word (name with spaces, up to 3 words)
+    pattern = r'@([A-Za-z][A-Za-z\s]*)'
+    matches = re.findall(pattern, text)
+    return [m.strip() for m in matches]
 
 
 @router.get("")

@@ -33,13 +33,7 @@ async def list_members(
     current_user: Annotated[dict, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db),
 ):
-    role = current_user["role"]
-
-    if role == "member":
-        member_id = current_user.get("member_id")
-        all_members = await crud.list_all_members(db)
-        return [m for m in all_members if m["id"] == member_id]
-
+    # Return the full workspace team so UI dropdowns can show every teammate.
     workspace_id = _workspace_id_for(current_user)
     return await crud.list_all_members(db, workspace_id=workspace_id)
 

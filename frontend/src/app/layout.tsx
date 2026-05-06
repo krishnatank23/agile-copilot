@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body style={{ background: "#09090f", color: "#f1f5f9" }}>
+      <body style={{ background: "#ffffff", color: "#111827" }}>
         <AuthProvider>
           <AuthGuard>
             <SidebarShell>{children}</SidebarShell>

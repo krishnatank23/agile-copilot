@@ -33,8 +33,8 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
     <button onClick={onClick}
       className="px-[10px] py-[3px] rounded-[20px] text-[11.5px] font-medium whitespace-nowrap transition-all cursor-pointer flex-shrink-0"
       style={active
-        ? { background: "rgba(217,70,239,0.12)", border: "1px solid rgba(217,70,239,0.25)", color: "#e879f9" }
-        : { background: "transparent", border: "1px solid rgba(255,255,255,0.07)", color: "#475569" }}>
+        ? { background: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.3)", color: "#7c3aed" }
+        : { background: "transparent", border: "1px solid rgba(0,0,0,0.1)", color: "#6b7280" }}>
       {children}
     </button>
   );
@@ -60,8 +60,8 @@ function TextCell({ task, field, editing, onStartEdit, onCommit, onCancel }: Cel
   if (editing) {
     return (
       <input ref={ref} defaultValue={val} autoFocus
-        className="w-full bg-transparent text-slate-100 text-[12.5px] outline-none rounded px-1"
-        style={{ border: "1px solid rgba(217,70,239,0.5)", minWidth: 120 }}
+        className="w-full bg-transparent text-gray-900 text-[12.5px] outline-none rounded px-1"
+        style={{ border: "1px solid rgba(139,92,246,0.5)", minWidth: 120 }}
         onBlur={(e) => onCommit(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter") { e.preventDefault(); onCommit((e.target as HTMLInputElement).value); }
@@ -74,10 +74,10 @@ function TextCell({ task, field, editing, onStartEdit, onCommit, onCancel }: Cel
   return (
     <div onClick={onStartEdit} title="Click to edit"
       className="cursor-text rounded px-1 py-[1px] transition-colors max-w-[200px] truncate"
-      style={{ color: val ? "#94a3b8" : "#475569" }}
-      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)")}
+      style={{ color: val ? "#1f2937" : "#9ca3af" }}
+      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.04)")}
       onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}>
-      {val || <span style={{ color: "#334155" }}>—</span>}
+      {val || <span style={{ color: "#d1d5db" }}>—</span>}
     </div>
   );
 }
@@ -89,8 +89,8 @@ function TaskNameCell({ task, editing, onStartEdit, onCommit, onCancel }: CellPr
   if (editing) {
     return (
       <input ref={ref} defaultValue={task.sprint_backlog} autoFocus
-        className="bg-transparent text-slate-100 text-[12.5px] font-medium outline-none rounded px-1"
-        style={{ border: "1px solid rgba(217,70,239,0.5)", width: 210 }}
+        className="bg-transparent text-gray-900 text-[12.5px] font-medium outline-none rounded px-1"
+        style={{ border: "1px solid rgba(139,92,246,0.5)", width: 210 }}
         onBlur={(e) => onCommit(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter") { e.preventDefault(); onCommit((e.target as HTMLInputElement).value); }
@@ -102,12 +102,12 @@ function TaskNameCell({ task, editing, onStartEdit, onCommit, onCancel }: CellPr
 
   return (
     <div onClick={onStartEdit} title="Click to edit" className="cursor-text">
-      <div className="font-medium text-slate-100 text-[12.5px] max-w-[210px] truncate rounded px-1 py-[1px]"
-        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)")}
+      <div className="font-medium text-gray-900 text-[12.5px] max-w-[210px] truncate rounded px-1 py-[1px]"
+        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.04)")}
         onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}>
         {task.sprint_backlog}
       </div>
-      {task.comments && <div className="text-[11px] text-slate-600 mt-[2px] truncate px-1">{task.comments}</div>}
+      {task.comments && <div className="text-[11px] text-gray-500 mt-[2px] truncate px-1">{task.comments}</div>}
     </div>
   );
 }
@@ -123,8 +123,8 @@ function SelectCell({ task, field, options, renderOption, editing, onStartEdit, 
   if (editing) {
     return (
       <select ref={ref} defaultValue={val} autoFocus
-        className="bg-[#11111b] text-slate-100 text-[11.5px] rounded outline-none px-2 py-[3px]"
-        style={{ border: "1px solid rgba(217,70,239,0.5)" }}
+        className="bg-white text-gray-900 text-[11.5px] rounded outline-none px-2 py-[3px]"
+        style={{ border: "1px solid rgba(139,92,246,0.5)" }}
         onBlur={(e) => onCommit(e.target.value)}
         onChange={(e) => onCommit(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Escape") onCancel(); }}
@@ -136,9 +136,9 @@ function SelectCell({ task, field, options, renderOption, editing, onStartEdit, 
 
   return (
     <div onClick={onStartEdit} className="cursor-pointer rounded px-1 py-[1px]"
-      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)")}
+      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.04)")}
       onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}>
-      {renderOption ? renderOption(val) : <span className="text-slate-400 text-[12.5px]">{val}</span>}
+      {renderOption ? renderOption(val) : <span className="text-gray-500 text-[12.5px]">{val}</span>}
     </div>
   );
 }
@@ -151,8 +151,8 @@ function NumberCell({ task, field, editing, onStartEdit, onCommit, onCancel }: C
   if (editing) {
     return (
       <input ref={ref} type="number" defaultValue={val} min={0} max={20} autoFocus
-        className="w-12 bg-transparent text-slate-100 text-[12.5px] font-semibold outline-none rounded px-1 text-center"
-        style={{ border: "1px solid rgba(217,70,239,0.5)" }}
+        className="w-12 bg-transparent text-gray-900 text-[12.5px] font-semibold outline-none rounded px-1 text-center"
+        style={{ border: "1px solid rgba(139,92,246,0.5)" }}
         onBlur={(e) => onCommit(parseInt(e.target.value) || 0)}
         onKeyDown={(e) => {
           if (e.key === "Enter") { e.preventDefault(); onCommit(parseInt((e.target as HTMLInputElement).value) || 0); }
@@ -164,9 +164,9 @@ function NumberCell({ task, field, editing, onStartEdit, onCommit, onCancel }: C
 
   return (
     <div onClick={onStartEdit} className="cursor-text rounded px-1 py-[1px] text-center"
-      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)")}
+      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.04)")}
       onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}>
-      <span className="text-[12.5px] font-semibold text-slate-100">{val}</span>
+      <span className="text-[12.5px] font-semibold text-gray-900">{val}</span>
     </div>
   );
 }
@@ -190,6 +190,9 @@ export default function TasksPage() {
   const [editingCell, setEditingCell] = useState<EditingCell>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [, startTransition] = useTransition();
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const bottomScrollRef = useRef<HTMLDivElement>(null);
+  const syncingScrollRef = useRef(false);
 
 
 
@@ -258,6 +261,15 @@ export default function TasksPage() {
     return editingCell?.id === taskId && editingCell?.field === field;
   }
 
+  function syncScroll(source: HTMLDivElement, target: HTMLDivElement | null) {
+    if (!target || syncingScrollRef.current) return;
+    syncingScrollRef.current = true;
+    target.scrollLeft = source.scrollLeft;
+    window.requestAnimationFrame(() => {
+      syncingScrollRef.current = false;
+    });
+  }
+
 
 
   const q = search.toLowerCase();
@@ -281,12 +293,12 @@ export default function TasksPage() {
     <>
       {/* Topbar */}
       <div className="sticky top-0 z-10 flex items-center justify-between px-[26px] py-[13px]"
-        style={{ background: "rgba(9,9,15,0.88)", backdropFilter: "blur(14px)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+        style={{ background: "rgba(255,255,255,0.95)", backdropFilter: "blur(14px)", borderBottom: "1px solid rgba(0,0,0,0.07)" }}>
         <div>
-          <h1 className="text-[19px] font-bold text-slate-100 tracking-[-0.5px]">
+          <h1 className="text-[19px] font-bold text-gray-900 tracking-[-0.5px]">
             {user?.role === "super_admin" ? "All Tasks" : isManager ? "Tasks" : "My Tasks"}
           </h1>
-          <p className="text-[11.5px] text-slate-600 mt-[2px]">
+          <p className="text-[11.5px] text-gray-600 mt-[2px]">
             {visible.length} task{visible.length !== 1 ? "s" : ""} · click any cell to edit
             {lastRefreshed && (
               <span className="ml-2 opacity-50">· synced {lastRefreshed.toLocaleTimeString()}</span>
@@ -298,49 +310,49 @@ export default function TasksPage() {
       <div className="p-[26px]">
         {error && (
           <div className="rounded-[10px] px-4 py-3 text-sm mb-5"
-            style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", color: "#f87171" }}>
+            style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#dc2626" }}>
             {error}
           </div>
         )}
 
         <div className="rounded-[12px] overflow-hidden"
-          style={{ background: "#11111b", border: "1px solid rgba(255,255,255,0.07)" }}>
+          style={{ background: "#ffffff", border: "1px solid rgba(0,0,0,0.07)" }}>
 
           {/* Header */}
           <div className="flex items-center justify-between px-[18px] py-[15px]"
-            style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+            style={{ borderBottom: "1px solid rgba(0,0,0,0.07)" }}>
             <div>
-              <h2 className="text-[14px] font-semibold text-slate-100">Sprint Tasks</h2>
-              <p className="text-[11.5px] text-slate-600 mt-[2px]">Showing {visible.length} of {tasks.length}</p>
+              <h2 className="text-[14px] font-semibold text-gray-900">Sprint Tasks</h2>
+              <p className="text-[11.5px] text-gray-600 mt-[2px]">Showing {visible.length} of {tasks.length}</p>
             </div>
             <div className="flex items-center gap-[6px] px-[10px] py-[6px] rounded-[6px]"
-              style={{ border: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.03)" }}>
+              style={{ border: "1px solid rgba(0,0,0,0.1)", background: "rgba(0,0,0,0.02)" }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
-                className="w-[13px] h-[13px] text-slate-600 flex-shrink-0">
+                className="w-[13px] h-[13px] text-gray-600 flex-shrink-0">
                 <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
               <input type="text" placeholder="Search…" value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="bg-transparent border-none outline-none text-[12px] text-slate-100 placeholder:text-slate-600 w-36" />
+                className="bg-transparent border-none outline-none text-[12px] text-gray-900 placeholder:text-gray-500 w-36" />
             </div>
           </div>
 
           {/* Filter chips — manager only sees member filter */}
           <div className="flex items-center gap-[5px] px-[18px] py-[10px] overflow-x-auto"
-            style={{ borderBottom: "1px solid rgba(255,255,255,0.07)", scrollbarWidth: "none" }}>
+            style={{ borderBottom: "1px solid rgba(0,0,0,0.07)", scrollbarWidth: "none" }}>
             {isManager && (
               <>
-                <span className="text-[10.5px] text-slate-600 font-medium mr-[2px] flex-shrink-0">Member:</span>
+                <span className="text-[10.5px] text-gray-600 font-medium mr-[2px] flex-shrink-0">Member:</span>
                 <Chip active={memberFilter === "All"} onClick={() => setMemberFilter("All")}>All</Chip>
                 {members.map((m) => (
                   <Chip key={m.id} active={memberFilter === m.display_name} onClick={() => setMemberFilter(m.display_name)}>
                     {m.display_name}
                   </Chip>
                 ))}
-                <div className="w-[1px] h-[15px] flex-shrink-0 mx-[3px]" style={{ background: "rgba(255,255,255,0.07)" }} />
+                <div className="w-[1px] h-[15px] flex-shrink-0 mx-[3px]" style={{ background: "rgba(0,0,0,0.07)" }} />
               </>
             )}
-            <span className="text-[10.5px] text-slate-600 font-medium mr-[2px] flex-shrink-0">Status:</span>
+            <span className="text-[10.5px] text-gray-600 font-medium mr-[2px] flex-shrink-0">Status:</span>
             {STAGES.map((s) => (
               <Chip key={s} active={stageFilter === s} onClick={() => setStageFilter(stageFilter === s ? "All" : s)}>
                 {STAGE_STYLE[s].label}
@@ -349,18 +361,23 @@ export default function TasksPage() {
           </div>
 
           {/* Table */}
-          <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 220px)" }}>
+          <div
+            ref={tableScrollRef}
+            onScroll={(e) => syncScroll(e.currentTarget, bottomScrollRef.current)}
+            className="tasks-scrollbar overflow-x-scroll overflow-y-auto"
+            style={{ maxHeight: "calc(100vh - 220px)", scrollbarGutter: "stable both-edges" }}
+          >
             {loading ? (
-              <div className="px-[18px] py-10 text-center text-[13px] text-slate-600">Loading tasks…</div>
+              <div className="px-[18px] py-10 text-center text-[13px] text-gray-500">Loading tasks…</div>
             ) : visible.length === 0 ? (
-              <div className="px-[18px] py-12 text-center text-[13px] text-slate-600">No tasks match your filters.</div>
+              <div className="px-[18px] py-12 text-center text-[13px] text-gray-500">No tasks match your filters.</div>
             ) : (
-              <table className="w-full border-collapse text-[12.5px]">
+              <table className="min-w-[1300px] w-full border-collapse text-[12.5px]">
                 <thead className="sticky top-0 z-10">
                   <tr>
                     {["Member", "Task", "Brand", "Activity", "Stage", "Priority", "Exp SP", "Act SP", "Deadline", "Comments"].map((h) => (
                       <th key={h} className="px-[13px] py-[9px] text-left text-[10px] font-semibold uppercase tracking-[0.6px] whitespace-nowrap"
-                        style={{ color: "#475569", background: "#11111b", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                        style={{ color: "#6b7280", background: "#ffffff", borderBottom: "1px solid rgba(0,0,0,0.07)" }}>
                         {h}
                       </th>
                     ))}
@@ -378,11 +395,11 @@ export default function TasksPage() {
                       <tr key={task.id}
                         className="transition-colors"
                         style={{
-                          borderBottom: "1px solid rgba(255,255,255,0.032)",
+                          borderBottom: "1px solid rgba(0,0,0,0.07)",
                           borderLeft: `3px solid ${leftColor}`,
                           opacity: isSaving ? 0.6 : 1,
                         }}
-                        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.02)")}
+                        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.02)")}
                         onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}>
 
                         {/* Member (read-only) */}
@@ -392,7 +409,7 @@ export default function TasksPage() {
                               style={{ width: 24, height: 24, background: color }}>
                               {initials(task.member_name ?? "?")}
                             </div>
-                            <span className="font-medium text-slate-100">{task.member_name}</span>
+                            <span className="font-medium text-gray-900">{task.member_name}</span>
                           </div>
                         </td>
 
@@ -463,7 +480,7 @@ export default function TasksPage() {
                               onCommit={(v) => commitCell(task, "expected_story_points", v)}
                               onCancel={cancelEdit} />
                           ) : (
-                            <span className="text-slate-400">{task.expected_story_points}</span>
+                            <span className="text-gray-500">{task.expected_story_points}</span>
                           )}
                         </td>
 
@@ -501,10 +518,12 @@ export default function TasksPage() {
             )}
           </div>
 
+
+
           {/* Footer */}
           {!loading && visible.length > 0 && (
             <div className="flex items-center gap-[18px] px-[18px] py-[11px] flex-wrap"
-              style={{ borderTop: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.015)" }}>
+              style={{ borderTop: "1px solid rgba(0,0,0,0.07)", background: "rgba(0,0,0,0.02)" }}>
               {[
                 { label: "tasks", val: visible.length, color: "#94a3b8" },
                 { label: "WIP", val: visible.filter((t) => t.stage === "WIP").length, color: "#60a5fa" },
@@ -516,8 +535,8 @@ export default function TasksPage() {
                   color: "#94a3b8"
                 },
               ].map((s, i) => (
-                <span key={s.label} className="flex items-center gap-[5px] text-[12px] text-slate-600">
-                  {i > 0 && <span className="inline-block w-[1px] h-[13px] mr-[13px]" style={{ background: "rgba(255,255,255,0.07)" }} />}
+                <span key={s.label} className="flex items-center gap-[5px] text-[12px] text-gray-600">
+                  {i > 0 && <span className="inline-block w-[1px] h-[13px] mr-[13px]" style={{ background: "rgba(0,0,0,0.07)" }} />}
                   <strong style={{ color: s.color }}>{s.val}</strong> {s.label}
                 </span>
               ))}

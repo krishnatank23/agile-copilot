@@ -13,7 +13,7 @@ from sqlalchemy import select, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.models import Workspace, Member, Task, BacklogItem, EODMessage
+from app.db.models import Workspace, User, Member, Task, BacklogItem, EODMessage
 
 logger = logging.getLogger(__name__)
 
@@ -236,12 +236,23 @@ async def list_all_members(
         query = query.where(Member.workspace_id == workspace_id)
     result = await db.execute(query)
     members = result.scalars().all()
+
+    manager_name = None
+    if workspace_id is not None:
+        manager_result = await db.execute(
+            select(User.username)
+            .where(User.workspace_id == workspace_id, User.role == "manager")
+            .order_by(User.id)
+        )
+        manager_name = manager_result.scalars().first()
+
     return [
         {
             "id": m.id,
             "display_name": m.display_name,
             "workspace_id": m.workspace_id,
             "created_at": m.created_at.isoformat() if m.created_at else None,
+            "manager_name": manager_name,
         }
         for m in members
     ]
