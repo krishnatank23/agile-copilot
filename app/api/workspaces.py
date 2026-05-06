@@ -66,6 +66,10 @@ class WorkspaceUpdate(BaseModel):
     slack_channel_id: str | None = None
 
 
+class SetTeamsChatId(BaseModel):
+    teams_agile_chat_id: str  # Teams chat ID to send mention messages to
+
+
 # ──────────────────────────────────────────────
 # General workspace endpoints
 # ──────────────────────────────────────────────
@@ -132,6 +136,31 @@ async def delete_workspace(workspace_id: int, db: AsyncSession = Depends(get_db)
     if not ok:
         raise HTTPException(status_code=400, detail="Cannot delete default workspace or workspace not found")
     return {"status": "deleted", "id": workspace_id}
+
+
+@router.post("/api/workspaces/{workspace_id}/set-teams-chat")
+async def set_teams_chat_id(
+    workspace_id: int,
+    body: SetTeamsChatId,
+    current_user: Annotated[dict, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+):
+    """Set the Teams chat ID for mention messages."""
+    role = current_user.get("role")
+    
+    # Managers can set for their own workspace, super_admin for any
+    if role == "manager":
+        if current_user.get("workspace_id") != workspace_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+    elif role != "super_admin":
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    updated = await crud.update_workspace(db, workspace_id, {"teams_agile_chat_id": body.teams_agile_chat_id})
+    if not updated:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    
+    logger.info(f"✅ Teams chat ID updated for workspace {workspace_id}: {body.teams_agile_chat_id}")
+    return {"status": "updated", "workspace_id": workspace_id, "teams_agile_chat_id": body.teams_agile_chat_id}
 
 
 # ──────────────────────────────────────────────

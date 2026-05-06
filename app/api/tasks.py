@@ -107,4 +107,60 @@ async def update_task(
     updated = await crud.update_task(db, task_id, body.model_dump(exclude_none=True))
     if updated is None:
         raise HTTPException(status_code=404, detail="Task not found")
+
+    # ── Send to Teams if comment has mentions ──
+    if body.comments:
+        logger.info(f"Comment updated for task {task_id}: {body.comments[:100]}")
+        mentions = _extract_mentions(body.comments)
+        logger.info(f"Extracted mentions: {mentions}")
+        
+        if mentions:
+            try:
+                # Get the task and member info
+                result = await db.execute(
+                    select(Task, Member).join(Member, Task.member_id == Member.id)
+                    .where(Task.id == task_id)
+                )
+                task_row, member = result.first()
+                if not task_row or not member:
+                    logger.warning(f"Task {task_id} or member not found when sending Teams message")
+                    return updated
+
+                logger.info(f"Found task: {task_row.sprint_backlog}, member: {member.display_name}")
+
+                # Get workspace for Teams adapter
+                ws_result = await db.execute(
+                    select(Workspace).where(Workspace.id == member.workspace_id)
+                )
+                workspace = ws_result.scalar_one_or_none()
+                if not workspace:
+                    logger.warning(f"Workspace {member.workspace_id} not found for Teams adapter")
+                    return updated
+
+                logger.info(f"Workspace: {workspace.name}, Teams chat ID: {workspace.teams_agile_chat_id}")
+
+                # Build Teams message with task details and comment
+                mentioned_names = ", ".join([f"@{m}" for m in mentions])
+                html_msg = f"""
+                <div style="margin: 10px 0; padding: 12px; border-left: 3px solid #7c3aed; background: #f3f0ff; border-radius: 4px;">
+                    <p style="margin: 0 0 8px 0; color: #7c3aed; font-weight: bold;">💬 New Comment on Task</p>
+                    <p style="margin: 4px 0;"><b>Task:</b> {task_row.sprint_backlog}</p>
+                    <p style="margin: 4px 0;"><b>Assigned to:</b> {member.display_name}</p>
+                    <p style="margin: 4px 0;"><b>Mentioned:</b> {mentioned_names}</p>
+                    <p style="margin: 4px 0;"><b>Comment:</b> {task_row.comments}</p>
+                    <p style="margin: 4px 0;"><b>Stage:</b> {task_row.stage} | <b>Priority:</b> {task_row.priority}</p>
+                </div>
+                """
+
+                logger.info(f"Sending Teams message to workspace {member.workspace_id}")
+                # Send to Teams
+                adapter = TeamsAdapter.from_workspace(workspace)
+                await adapter.send_message(html_msg)
+                logger.info(f"✅ Teams message sent for task {task_id} with mentions: {mentions}")
+            except Exception as e:
+                logger.error(f"❌ Failed to send Teams message for task {task_id}: {str(e)}", exc_info=True)
+                # Don't fail the API call, just log it
+        else:
+            logger.info(f"No mentions found in comment for task {task_id}")
+
     return updated
