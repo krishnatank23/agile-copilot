@@ -20,21 +20,14 @@ class CreateMemberRequest(BaseModel):
     workspace_id: int | None = None
 
 
-def _workspace_id_for(user: dict) -> int | None:
-    """Return workspace_id filter: None = all (super_admin), int = scoped."""
-    role = user.get("role")
-    if role == "super_admin":
-        return None
-    return user.get("workspace_id") or 1
-
-
 @router.get("")
 async def list_members(
     current_user: Annotated[dict, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db),
 ):
-    # Return the full workspace team so UI dropdowns can show every teammate.
-    workspace_id = _workspace_id_for(current_user)
+    if current_user["role"] == "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin does not have access to members")
+    workspace_id = current_user.get("workspace_id") or 1
     return await crud.list_all_members(db, workspace_id=workspace_id)
 
 
@@ -45,17 +38,14 @@ async def create_member(
     db: AsyncSession = Depends(get_db),
 ):
     role = current_user.get("role")
-    if role not in ("manager", "super_admin"):
+    if role != "manager":
         raise HTTPException(status_code=403, detail="Manager access required")
 
     display_name = body.display_name.strip()
     if not display_name:
         raise HTTPException(status_code=400, detail="display_name is required")
 
-    if role == "manager":
-        workspace_id = current_user.get("workspace_id") or 1
-    else:
-        workspace_id = body.workspace_id or 1
+    workspace_id = current_user.get("workspace_id") or 1
 
     existing = await db.execute(
         select(Member).where(

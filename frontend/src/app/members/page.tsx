@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api, type Member, type SprintProgress } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -206,6 +207,7 @@ function AddMemberModal({
 
 export default function MembersPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [members, setMembers] = useState<Member[]>([]);
   const [progress, setProgress] = useState<SprintProgress[]>([]);
   const [existingUsers, setExistingUsers] = useState<{ member_id: number | null }[]>([]);
@@ -214,7 +216,7 @@ export default function MembersPage() {
   const [createFor, setCreateFor] = useState<Member | null>(null);
   const [showAddMember, setShowAddMember] = useState(false);
 
-  const isManager = user?.role === "manager" || user?.role === "super_admin";
+  const isManager = user?.role === "manager";
 
   useEffect(() => {
     const fetches: Promise<void>[] = [
@@ -229,6 +231,12 @@ export default function MembersPage() {
     }
     Promise.all(fetches).finally(() => setLoading(false));
   }, [isManager]);
+
+  useEffect(() => {
+    if (user?.role === "super_admin") router.replace("/settings");
+  }, [user, router]);
+
+  if (user?.role === "super_admin") return null;
 
   const progressByMember = Object.fromEntries(progress.map((p) => [p.member, p]));
   const usedMemberIds = new Set(existingUsers.map((u) => u.member_id).filter(Boolean));
@@ -262,7 +270,7 @@ export default function MembersPage() {
         style={{ background: "rgba(255,255,255,0.95)", backdropFilter: "blur(14px)", borderBottom: "1px solid rgba(0,0,0,0.07)" }}>
         <div>
           <h1 className="text-[19px] font-bold text-gray-900 tracking-[-0.5px]">
-            {user?.role === "super_admin" ? "All Members" : isManager ? "Team Members" : "My Profile"}
+            {isManager ? "Team Members" : "My Profile"}
           </h1>
           <p className="text-[11.5px] text-gray-600 mt-[2px]">
             {isManager

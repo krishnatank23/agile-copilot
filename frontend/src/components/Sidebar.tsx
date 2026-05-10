@@ -6,14 +6,6 @@ import { useAuth } from "@/context/AuthContext";
 
 const NAV_SUPER_ADMIN = [
   {
-    label: "Overview",
-    items: [
-      { href: "/dashboard", label: "All Teams", icon: <DashIcon /> },
-      { href: "/tasks", label: "All Tasks", icon: <TasksIcon /> },
-      { href: "/members", label: "All Members", icon: <MembersIcon /> },
-    ],
-  },
-  {
     label: "Admin",
     items: [
       { href: "/users", label: "Users & Access", icon: <ShieldIcon /> },

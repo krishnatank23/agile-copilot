@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { api, type Task, type Member } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -177,7 +178,7 @@ type EditingCell = { id: number; field: keyof Task } | null;
 
 export default function TasksPage() {
   const { user } = useAuth();
-  const isManager = user?.role === "manager" || user?.role === "super_admin";
+  const router = useRouter();
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -195,7 +196,7 @@ export default function TasksPage() {
   const bottomScrollRef = useRef<HTMLDivElement>(null);
   const syncingScrollRef = useRef(false);
 
-
+  const isManager = user?.role === "manager";
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -247,6 +248,12 @@ export default function TasksPage() {
       clearInterval(pollInterval);
     };
   }, [load]);
+
+  useEffect(() => {
+    if (user?.role === "super_admin") router.replace("/settings");
+  }, [user, router]);
+
+  if (user?.role === "super_admin") return null;
 
   async function commitCell(task: Task, field: keyof Task, rawValue: string | number) {
     setEditingCell(null);
@@ -314,7 +321,7 @@ export default function TasksPage() {
         style={{ background: "rgba(255,255,255,0.95)", backdropFilter: "blur(14px)", borderBottom: "1px solid rgba(0,0,0,0.07)" }}>
         <div>
           <h1 className="text-[19px] font-bold text-gray-900 tracking-[-0.5px]">
-            {user?.role === "super_admin" ? "All Tasks" : isManager ? "Tasks" : "My Tasks"}
+            {isManager ? "Tasks" : "My Tasks"}
           </h1>
           <p className="text-[11.5px] text-gray-600 mt-[2px]">
             {visible.length} task{visible.length !== 1 ? "s" : ""} · click any cell to edit

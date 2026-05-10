@@ -13,7 +13,7 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!loading && user) router.replace("/dashboard");
+    if (!loading && user) router.replace(user.role === "super_admin" ? "/settings" : "/dashboard");
   }, [user, loading, router]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -22,7 +22,7 @@ export default function LoginPage() {
     setError("");
     try {
       await login(username, password);
-      router.replace("/dashboard");
+      // redirect is handled by the useEffect above once user state is set
     } catch {
       setError("Incorrect username or password.");
     } finally {

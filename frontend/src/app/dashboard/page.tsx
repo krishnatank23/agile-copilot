@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { api, type SprintProgress } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -57,14 +58,13 @@ function MetricCard({ label, value, sub, trend = "neutral", color, icon }: Metri
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [progress, setProgress] = useState<SprintProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [countdown, setCountdown] = useState(30);
   const [, startTransition] = useTransition();
-
-  const isSuperAdmin = user?.role === "super_admin";
 
   function loadData(silent = false) {
     if (!silent) setLoading(true);
@@ -94,6 +94,14 @@ export default function DashboardPage() {
     return () => { clearInterval(pollInterval); clearInterval(tickInterval); };
   }, []);
 
+  useEffect(() => {
+    if (user?.role === "super_admin") router.replace("/settings");
+  }, [user, router]);
+
+  if (user?.role === "super_admin") return null;
+
+  const isSuperAdmin = false;
+
   const totals = progress.reduce(
     (acc, p) => ({
       tasks: acc.tasks + p.total_tasks,
@@ -108,7 +116,6 @@ export default function DashboardPage() {
   const teamPct = totals.expected > 0 ? Math.round((totals.actual / totals.expected) * 100) : 0;
   const activeMembers = progress.filter((p) => p.total_tasks > 0).length;
 
-  // Group by workspace for super_admin view
   const workspaces = isSuperAdmin
     ? Array.from(new Map(progress.map((p) => [p.workspace_id, p.workspace_name])))
     : [];

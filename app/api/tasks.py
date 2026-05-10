@@ -33,12 +33,6 @@ class TaskUpdate(BaseModel):
     actual_story_points: int | None = None
 
 
-def _workspace_id_for(user: dict) -> int | None:
-    """Return workspace_id filter: None = all (super_admin), int = scoped."""
-    role = user.get("role")
-    if role == "super_admin":
-        return None
-    return user.get("workspace_id") or 1
 
 
 def _extract_mentions(text: str) -> list[str]:
@@ -71,14 +65,15 @@ async def list_tasks(
     current_user: Annotated[dict, Depends(get_current_user)] = None,
     db: AsyncSession = Depends(get_db),
 ):
-    # Members can only see their own tasks
     role = current_user["role"]
+    if role == "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin does not have access to tasks")
+
     if role == "member":
         member_id = current_user.get("member_id")
         if not member_id:
             return []
         tasks = await crud.get_tasks_for_member(db, member_id)
-        # Enrich with member name and apply stage filter
         result = await db.execute(select(Member).where(Member.id == member_id))
         m = result.scalar_one_or_none()
         name = m.display_name if m else ""
@@ -88,7 +83,7 @@ async def list_tasks(
             tasks = [t for t in tasks if t["stage"] == stage]
         return tasks
 
-    workspace_id = _workspace_id_for(current_user)
+    workspace_id = current_user.get("workspace_id") or 1
     return await crud.list_tasks(db, member_name=member, stage=stage, workspace_id=workspace_id)
 
 
@@ -100,6 +95,9 @@ async def update_task(
     db: AsyncSession = Depends(get_db),
 ):
     role = current_user["role"]
+
+    if role == "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin does not have access to tasks")
 
     if role == "member":
         member_id = current_user.get("member_id")

@@ -265,6 +265,7 @@ export default function UsersPage() {
   const [error, setError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editUser, setEditUser] = useState<UserRecord | null>(null);
+  const [expandedManagerId, setExpandedManagerId] = useState<number | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -288,6 +289,18 @@ export default function UsersPage() {
   const managers = users.filter((u) => u.role === "manager");
   const superAdmins = users.filter((u) => u.role === "super_admin");
   const members = users.filter((u) => u.role === "member");
+
+  // Group member accounts by workspace_id
+  const membersByWorkspace: Record<number, UserRecord[]> = {};
+  for (const m of members) {
+    const wsId = m.workspace_id ?? 0;
+    if (!membersByWorkspace[wsId]) membersByWorkspace[wsId] = [];
+    membersByWorkspace[wsId].push(m);
+  }
+
+  function toggleManager(managerId: number) {
+    setExpandedManagerId((prev) => (prev === managerId ? null : managerId));
+  }
 
   return (
     <>
@@ -352,34 +365,66 @@ export default function UsersPage() {
               ))}
             </Section>
 
-            {/* Managers */}
-            <Section title="Team Managers" count={managers.length} color="#e879f9"
+            {/* Managers — click to expand their members */}
+            <Section
+              title="Team Managers"
+              count={managers.length}
+              color="#e879f9"
               action={<button onClick={() => setShowCreate(true)} className="text-[11px] text-fuchsia-400 hover:text-fuchsia-300 transition-colors">+ Add manager</button>}
             >
               {managers.length === 0 ? (
                 <EmptyRow message="No managers yet. Click '+ Add manager' to create one." />
-              ) : managers.map((u) => (
-                <UserRow
-                  key={u.id}
-                  user={u}
-                  workspaceName={u.workspace_id ? (wsMap[u.workspace_id] ?? `Workspace #${u.workspace_id}`) : "—"}
-                  onEdit={() => setEditUser(u)}
-                />
-              ))}
-            </Section>
+              ) : managers.map((mgr) => {
+                const wsId = mgr.workspace_id ?? 0;
+                const wsName = wsId ? (wsMap[wsId] ?? `Workspace #${wsId}`) : "—";
+                const teamMembers = membersByWorkspace[wsId] ?? [];
+                const isExpanded = expandedManagerId === mgr.id;
 
-            {/* Members */}
-            <Section title="Team Members" count={members.length} color="#60a5fa">
-              {members.length === 0 ? (
-                <EmptyRow message="No member accounts yet. Managers create these from the Members page." />
-              ) : members.map((u) => (
-                <UserRow
-                  key={u.id}
-                  user={u}
-                  workspaceName={u.workspace_id ? (wsMap[u.workspace_id] ?? `Workspace #${u.workspace_id}`) : "—"}
-                  onEdit={() => setEditUser(u)}
-                />
-              ))}
+                return (
+                  <div key={mgr.id}>
+                    <UserRow
+                      user={mgr}
+                      workspaceName={wsName}
+                      onEdit={() => setEditUser(mgr)}
+                      expandable
+                      expanded={isExpanded}
+                      memberCount={teamMembers.length}
+                      onToggle={() => toggleManager(mgr.id)}
+                    />
+                    {isExpanded && (
+                      <div style={{ background: "rgba(139,92,246,0.03)", borderTop: "1px solid rgba(139,92,246,0.08)" }}>
+                        {teamMembers.length === 0 ? (
+                          <div className="pl-[58px] pr-[18px] py-[12px] text-[11.5px] text-gray-500">
+                            No member accounts in this workspace yet.
+                          </div>
+                        ) : teamMembers.map((m) => (
+                          <div
+                            key={m.id}
+                            className="flex items-center gap-4 pl-[58px] pr-[18px] py-[11px] transition-colors"
+                            style={{ borderBottom: "1px solid rgba(0,0,0,0.03)" }}
+                            onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.02)")}
+                            onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}
+                          >
+                            <div
+                              className="flex-shrink-0 flex items-center justify-center rounded-full text-[9px] font-bold text-white"
+                              style={{ width: 26, height: 26, background: "linear-gradient(135deg,#3b82f6,#6366f1)" }}
+                            >
+                              {m.username.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[12.5px] font-medium text-gray-900 truncate">{m.username}</p>
+                              {m.member_id && (
+                                <p className="text-[11px] text-gray-500">Member ID #{m.member_id}</p>
+                              )}
+                            </div>
+                            <RoleBadge role="member" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </Section>
           </>
         )}
@@ -391,9 +436,9 @@ export default function UsersPage() {
         >
           <p className="font-semibold text-gray-700">How access works</p>
           <ul className="list-disc list-inside space-y-1">
-            <li><span className="text-gray-700">Super Admin:</span> Sees and manages everything across all teams.</li>
+            <li><span className="text-gray-700">Super Admin:</span> Manages workspaces and user accounts across all teams.</li>
             <li><span className="text-gray-700">Manager:</span> Scoped to one workspace — sees their team&apos;s tasks and members only.</li>
-            <li><span className="text-gray-700">Member:</span> Sees only their own tasks. Created by managers from the Members page.</li>
+            <li><span className="text-gray-700">Member:</span> Sees only their own tasks. Click a manager row to view their team.</li>
             <li>Members are auto-created when someone posts an EOD update in Teams or Slack.</li>
           </ul>
         </div>
@@ -431,7 +476,17 @@ function Section({
   );
 }
 
-function UserRow({ user, workspaceName, onEdit }: { user: UserRecord; workspaceName: string; onEdit?: () => void }) {
+function UserRow({
+  user, workspaceName, onEdit, expandable, expanded, memberCount, onToggle,
+}: {
+  user: UserRecord;
+  workspaceName: string;
+  onEdit?: () => void;
+  expandable?: boolean;
+  expanded?: boolean;
+  memberCount?: number;
+  onToggle?: () => void;
+}) {
   const initials = user.username.slice(0, 2).toUpperCase();
   const avatarColor =
     user.role === "super_admin" ? "linear-gradient(135deg,#f59e0b,#d97706)" :
@@ -441,9 +496,14 @@ function UserRow({ user, workspaceName, onEdit }: { user: UserRecord; workspaceN
   return (
     <div
       className="flex items-center gap-4 px-[18px] py-[13px] transition-colors group"
-      style={{ borderBottom: "1px solid rgba(0,0,0,0.04)" }}
-      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.02)")}
-      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}
+      style={{
+        borderBottom: "1px solid rgba(0,0,0,0.04)",
+        cursor: expandable ? "pointer" : "default",
+        background: expanded ? "rgba(139,92,246,0.04)" : "",
+      }}
+      onClick={expandable ? onToggle : undefined}
+      onMouseEnter={(e) => { if (!expanded) (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.02)"; }}
+      onMouseLeave={(e) => { if (!expanded) (e.currentTarget as HTMLElement).style.background = ""; }}
     >
       <div
         className="flex-shrink-0 flex items-center justify-center rounded-full text-[10px] font-bold text-white"
@@ -454,14 +514,27 @@ function UserRow({ user, workspaceName, onEdit }: { user: UserRecord; workspaceN
       <div className="flex-1 min-w-0">
         <p className="text-[13px] font-medium text-gray-900 truncate">{user.username}</p>
         <p className="text-[11px] text-gray-600 mt-[1px] truncate">
-          {user.role === "member" && user.member_id ? `Member ID #${user.member_id} · ` : ""}
           {workspaceName}
+          {expandable && memberCount !== undefined && (
+            <span className="ml-[6px]" style={{ color: "#a78bfa" }}>
+              · {memberCount} member{memberCount !== 1 ? "s" : ""}
+            </span>
+          )}
         </p>
       </div>
       <RoleBadge role={user.role} />
+      {expandable && (
+        <svg
+          viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+          className="w-[13px] h-[13px] flex-shrink-0 transition-transform"
+          style={{ color: "#9ca3af", transform: expanded ? "rotate(180deg)" : "rotate(0deg)" }}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      )}
       {onEdit && (
         <button
-          onClick={onEdit}
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
           className="opacity-0 group-hover:opacity-100 transition-opacity text-[11px] px-[10px] py-[4px] rounded-[6px] text-gray-600 hover:text-gray-900"
           style={{ border: "1px solid rgba(0,0,0,0.1)" }}
         >
