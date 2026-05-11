@@ -9,6 +9,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<{ username?: string; password?: string }>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -16,8 +17,27 @@ export default function LoginPage() {
     if (!loading && user) router.replace(user.role === "super_admin" ? "/settings" : "/dashboard");
   }, [user, loading, router]);
 
+  function validate() {
+    const errors: { username?: string; password?: string } = {};
+    if (!username.trim()) {
+      errors.username = "Username is required.";
+    }
+    if (!password) {
+      errors.password = "Password is required.";
+    } else if (password.length < 4) {
+      errors.password = "Password must be at least 4 characters.";
+    }
+    return errors;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const errors = validate();
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
+    setFieldErrors({});
     setBusy(true);
     setError("");
     try {
@@ -72,14 +92,16 @@ export default function LoginPage() {
               type="text"
               autoComplete="username"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
+              onChange={(e) => { setUsername(e.target.value); setFieldErrors((prev) => ({ ...prev, username: undefined })); }}
               placeholder="manager"
               className="px-3 py-[10px] rounded-[8px] text-[13px] text-gray-900 placeholder:text-gray-500 outline-none transition-colors"
-              style={{ background: "#f9fafb", border: "1px solid rgba(0,0,0,0.1)" }}
-              onFocus={(e) => ((e.target as HTMLElement).style.borderColor = "rgba(139,92,246,0.4)")}
-              onBlur={(e) => ((e.target as HTMLElement).style.borderColor = "rgba(0,0,0,0.1)")}
+              style={{ background: "#f9fafb", border: `1px solid ${fieldErrors.username ? "#dc2626" : "rgba(0,0,0,0.1)"}` }}
+              onFocus={(e) => { if (!fieldErrors.username) (e.target as HTMLElement).style.borderColor = "rgba(139,92,246,0.4)"; }}
+              onBlur={(e) => { if (!fieldErrors.username) (e.target as HTMLElement).style.borderColor = "rgba(0,0,0,0.1)"; }}
             />
+            {fieldErrors.username && (
+              <p className="text-[11px]" style={{ color: "#dc2626" }}>{fieldErrors.username}</p>
+            )}
           </div>
 
           <div className="flex flex-col gap-[6px]">
@@ -88,14 +110,16 @@ export default function LoginPage() {
               type="password"
               autoComplete="current-password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
+              onChange={(e) => { setPassword(e.target.value); setFieldErrors((prev) => ({ ...prev, password: undefined })); }}
               placeholder="••••••••"
               className="px-3 py-[10px] rounded-[8px] text-[13px] text-gray-900 placeholder:text-gray-500 outline-none transition-colors"
-              style={{ background: "#f9fafb", border: "1px solid rgba(0,0,0,0.1)" }}
-              onFocus={(e) => ((e.target as HTMLElement).style.borderColor = "rgba(139,92,246,0.4)")}
-              onBlur={(e) => ((e.target as HTMLElement).style.borderColor = "rgba(0,0,0,0.1)")}
+              style={{ background: "#f9fafb", border: `1px solid ${fieldErrors.password ? "#dc2626" : "rgba(0,0,0,0.1)"}` }}
+              onFocus={(e) => { if (!fieldErrors.password) (e.target as HTMLElement).style.borderColor = "rgba(139,92,246,0.4)"; }}
+              onBlur={(e) => { if (!fieldErrors.password) (e.target as HTMLElement).style.borderColor = "rgba(0,0,0,0.1)"; }}
             />
+            {fieldErrors.password && (
+              <p className="text-[11px]" style={{ color: "#dc2626" }}>{fieldErrors.password}</p>
+            )}
           </div>
 
           {error && (
